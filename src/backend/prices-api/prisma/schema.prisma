@@ -111,16 +111,18 @@ model Tenant {
   updatedBy     String?    @map("updated_by") @db.VarChar(36)
   updatedByType ActorType? @map("updated_by_type")
 
-  currency        Currency        @relation(fields: [defaultCurrency], references: [code])
-  users           User[]
-  roles           Role[]
-  apiKeys         ApiKey[]
-  products        Product[]
-  marketplaces    Marketplace[]
-  priceLists      PriceList[]
-  prices          Price[]
-  discounts       Discount[]
-  priceHistory    PriceHistory[]
+  currency              Currency               @relation(fields: [defaultCurrency], references: [code])
+  users                 User[]
+  roles                 Role[]
+  apiKeys               ApiKey[]
+  products              Product[]
+  marketplaces          Marketplace[]
+  priceLists            PriceList[]
+  priceListProducts     PriceListProduct[]
+  priceListMarketplaces PriceListMarketplace[]
+  prices                Price[]
+  discounts             Discount[]
+  priceHistory          PriceHistory[]
 
   @@map("tenants")
 }
@@ -241,14 +243,14 @@ model ApiKey {
 // ---------------------------------------------------------------------------
 
 model Product {
-  id          String       @id @default(uuid()) @db.VarChar(36)
-  tenantId    String       @map("tenant_id") @db.VarChar(36)
-  sku         String       @db.VarChar(64)
-  name        String       @db.VarChar(200)
-  description String?      @db.Text
-  basePrice   Decimal      @map("base_price") @db.Decimal(12, 2)
-  currencyCode String      @map("currency_code") @db.Char(3)
-  status      RecordStatus @default(active)
+  id           String       @id @default(uuid()) @db.VarChar(36)
+  tenantId     String       @map("tenant_id") @db.VarChar(36)
+  sku          String       @db.VarChar(64)
+  name         String       @db.VarChar(200)
+  description  String?      @db.Text
+  basePrice    Decimal      @map("base_price") @db.Decimal(12, 2)
+  currencyCode String       @map("currency_code") @db.Char(3)
+  status       RecordStatus @default(active)
 
   createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
@@ -258,12 +260,12 @@ model Product {
   updatedBy     String?    @map("updated_by") @db.VarChar(36)
   updatedByType ActorType? @map("updated_by_type")
 
-  tenant           Tenant             @relation(fields: [tenantId], references: [id])
-  currency         Currency           @relation(fields: [currencyCode], references: [code])
-  prices           Price[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  currency          Currency           @relation(fields: [currencyCode], references: [code])
+  prices            Price[]
   priceListProducts PriceListProduct[]
-  discounts        Discount[]
-  priceHistory     PriceHistory[]
+  discounts         Discount[]
+  priceHistory      PriceHistory[]
 
   @@unique([tenantId, sku])
   // Enables composite (tenant-safe) foreign keys from Price / PriceHistory.
@@ -288,10 +290,10 @@ model Marketplace {
   updatedBy     String?    @map("updated_by") @db.VarChar(36)
   updatedByType ActorType? @map("updated_by_type")
 
-  tenant                  Tenant                   @relation(fields: [tenantId], references: [id])
-  prices                  Price[]
-  priceListMarketplaces   PriceListMarketplace[]
-  discounts               Discount[]
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id])
+  prices                Price[]
+  priceListMarketplaces PriceListMarketplace[]
+  discounts             Discount[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
@@ -329,24 +331,30 @@ model PriceList {
 }
 
 model PriceListProduct {
+  tenantId    String @map("tenant_id") @db.VarChar(36)
   priceListId String @map("price_list_id") @db.VarChar(36)
   productId   String @map("product_id") @db.VarChar(36)
 
-  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
-  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  priceList PriceList @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Cascade)
+  product   Product   @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Cascade)
 
-  @@id([priceListId, productId])
+  @@id([tenantId, priceListId, productId])
+  @@index([tenantId, productId])
   @@map("price_list_products")
 }
 
 model PriceListMarketplace {
+  tenantId      String @map("tenant_id") @db.VarChar(36)
   priceListId   String @map("price_list_id") @db.VarChar(36)
   marketplaceId String @map("marketplace_id") @db.VarChar(36)
 
-  priceList   PriceList   @relation(fields: [priceListId], references: [id], onDelete: Cascade)
-  marketplace Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  priceList   PriceList   @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Cascade)
+  marketplace Marketplace @relation(fields: [tenantId, marketplaceId], references: [tenantId, id], onDelete: Cascade)
 
-  @@id([priceListId, marketplaceId])
+  @@id([tenantId, priceListId, marketplaceId])
+  @@index([tenantId, marketplaceId])
   @@map("price_list_marketplaces")
 }
 
@@ -390,14 +398,14 @@ model Price {
 }
 
 model PriceHistory {
-  id           String    @id @default(uuid()) @db.VarChar(36)
-  tenantId     String    @map("tenant_id") @db.VarChar(36)
-  priceId      String    @map("price_id") @db.VarChar(36)
-  productId    String    @map("product_id") @db.VarChar(36)
-  oldBasePrice Decimal?  @map("old_base_price") @db.Decimal(12, 2)
-  newBasePrice Decimal?  @map("new_base_price") @db.Decimal(12, 2)
-  oldFinalPrice Decimal? @map("old_final_price") @db.Decimal(12, 2)
-  newFinalPrice Decimal? @map("new_final_price") @db.Decimal(12, 2)
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  tenantId      String    @map("tenant_id") @db.VarChar(36)
+  priceId       String    @map("price_id") @db.VarChar(36)
+  productId     String    @map("product_id") @db.VarChar(36)
+  oldBasePrice  Decimal?  @map("old_base_price") @db.Decimal(12, 2)
+  newBasePrice  Decimal?  @map("new_base_price") @db.Decimal(12, 2)
+  oldFinalPrice Decimal?  @map("old_final_price") @db.Decimal(12, 2)
+  newFinalPrice Decimal?  @map("new_final_price") @db.Decimal(12, 2)
   changedByType ActorType @map("changed_by_type")
   changedById   String?   @map("changed_by_id") @db.VarChar(36)
   reason        String    @db.VarChar(40)

@@ -305,7 +305,8 @@ row in the same transaction, recording old/new values, the reason and the actor
 
 ## Multi-tenancy and authentication
 
-A single shared MySQL database with `tenant_id` on every business table. Repositories
+A single shared MySQL database with `tenant_id` on every business table and relation
+table. Repositories
 **always** filter by the resolved tenant, so isolation is enforced at the data layer.
 Cross-tenant ids return **404** (not 403) to avoid leaking existence.
 
@@ -340,15 +341,15 @@ receives `403 TENANT_HEADER_NOT_ALLOWED`.
 Referencing another tenant's records is blocked at every level, not only when listing:
 
 1. **Composite foreign keys (database).** `prices` references `products`, `price_lists` and
-   `marketplaces` through `(tenant_id, <ref_id>) → (tenant_id, id)`, and `price_history`
-   does the same for `prices` and `products`. The engine itself refuses a cross-tenant
-   reference.
+   `marketplaces` through `(tenant_id, <ref_id>) → (tenant_id, id)`, `price_history`
+   does the same for `prices` and `products`, and price-list relation tables use the same
+   tenant-safe keys. The database itself refuses a cross-tenant reference.
 2. **Service validation (application).** `PriceService` verifies the product, price list and
    marketplace belong to the resolved tenant before calculating or persisting, and
    `DiscountService` does the same for its scope reference. This is required because a
    discount's two unused scope columns are necessarily `NULL`, which makes a composite
-   tenant foreign key impossible; the same applies to the price-list join tables, which are
-   validated by `PriceListService`.
+   tenant foreign key impractical in the current model; `DiscountService` therefore
+   normalizes scope columns and validates the active reference.
 3. **Repository scoping.** Every read is filtered by `tenant_id`, so an unknown
    cross-tenant id resolves to *not found* (422 on validation, 404 on resource lookups).
 

@@ -1,6 +1,7 @@
 import { inject, injectable } from 'tsyringe';
 import { TOKENS } from '../di/tokens';
 import { CrudService } from '../common/crud/service';
+import { ValidationError } from '../common/errors';
 import { assertReferencesBelongToTenant } from '../common/utils/tenant-references';
 import type { TenantCrudRepository } from '../common/crud/repository';
 import type { ActorContext } from '../types';
@@ -27,6 +28,32 @@ export class DiscountService extends CrudService<any> {
     @inject(TOKENS.MarketplaceRepository) private readonly marketplaceRepository: TenantCrudRepository<any>
   ) {
     super(repository, 'Discount');
+  }
+
+  private normalizeScopeData(data: Record<string, unknown>, scope: ScopeState): Record<string, unknown> {
+    const fields = ['productId', 'priceListId', 'marketplaceId'] as const;
+    const activeField = `${scope.appliesTo === 'price_list' ? 'priceList' : scope.appliesTo}Id` as (typeof fields)[number];
+
+    if (!scope[activeField]) {
+      throw new ValidationError('Invalid discount scope', [
+        { field: activeField, message: `${activeField} is required for '${scope.appliesTo}' discounts` }
+      ]);
+    }
+
+    for (const field of fields) {
+      if (field !== activeField && data[field] !== undefined && data[field] !== null) {
+        throw new ValidationError('Invalid discount scope', [
+          { field, message: `${field} must be empty when appliesTo is '${scope.appliesTo}'` }
+        ]);
+      }
+    }
+
+    return {
+      ...data,
+      productId: activeField === 'productId' ? scope.productId : null,
+      priceListId: activeField === 'priceListId' ? scope.priceListId : null,
+      marketplaceId: activeField === 'marketplaceId' ? scope.marketplaceId : null
+    };
   }
 
   private async assertScopeBelongsToTenant(tenantId: string | null, scope: ScopeState): Promise<void> {
@@ -74,14 +101,15 @@ export class DiscountService extends CrudService<any> {
     data: Record<string, unknown>,
     actor: ActorContext
   ): Promise<any> {
-    await this.assertScopeBelongsToTenant(tenantId, {
+    const scope: ScopeState = {
       appliesTo: String(data.appliesTo),
       productId: (data.productId as string) ?? null,
       priceListId: (data.priceListId as string) ?? null,
       marketplaceId: (data.marketplaceId as string) ?? null
-    });
+    };
+    await this.assertScopeBelongsToTenant(tenantId, scope);
 
-    return super.create(tenantId, data, actor);
+    return super.create(tenantId, this.normalizeScopeData(data, scope), actor);
   }
 
   override async update(
@@ -93,16 +121,22 @@ export class DiscountService extends CrudService<any> {
     const existing = await this.get(tenantId, id);
 
     // Merge the partial payload with the stored scope before validating.
+    const appliesTo = (data.appliesTo as string) ?? existing.appliesTo;
+    const scopeChanged = data.appliesTo !== undefined && data.appliesTo !== existing.appliesTo;
+    const fieldValue = (field: 'productId' | 'priceListId' | 'marketplaceId'): string | null => {
+      if (data[field] !== undefined) return (data[field] as string) ?? null;
+      if (scopeChanged) return null;
+      return existing[field] ?? null;
+    };
     const effective: ScopeState = {
-      appliesTo: (data.appliesTo as string) ?? existing.appliesTo,
-      productId: data.productId !== undefined ? (data.productId as string) : existing.productId,
-      priceListId: data.priceListId !== undefined ? (data.priceListId as string) : existing.priceListId,
-      marketplaceId:
-        data.marketplaceId !== undefined ? (data.marketplaceId as string) : existing.marketplaceId
+      appliesTo,
+      productId: fieldValue('productId'),
+      priceListId: fieldValue('priceListId'),
+      marketplaceId: fieldValue('marketplaceId')
     };
 
     await this.assertScopeBelongsToTenant(tenantId, effective);
 
-    return super.update(tenantId, id, data, actor);
+    return super.update(tenantId, id, this.normalizeScopeData(data, effective), actor);
   }
 }
