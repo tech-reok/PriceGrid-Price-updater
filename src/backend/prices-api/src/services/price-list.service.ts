@@ -44,14 +44,17 @@ export class PriceListService extends CrudService<any> {
     productIds: string[],
     _actor: ActorContext
   ): Promise<string[]> {
+    if (!tenantId) {
+      throw new ValidationError('Tenant context is required to manage price-list relations');
+    }
     await this.get(tenantId, id);
     await this.assertAllExist(this.productRepository, tenantId, productIds, 'productIds', 'products');
 
     await this.prisma.$transaction(async (tx: any) => {
-      await tx.priceListProduct.deleteMany({ where: { priceListId: id } });
+      await tx.priceListProduct.deleteMany({ where: { tenantId, priceListId: id } });
       if (productIds.length > 0) {
         await tx.priceListProduct.createMany({
-          data: productIds.map((productId) => ({ priceListId: id, productId }))
+          data: productIds.map((productId) => ({ tenantId, priceListId: id, productId }))
         });
       }
     });
@@ -65,6 +68,9 @@ export class PriceListService extends CrudService<any> {
     marketplaceIds: string[],
     _actor: ActorContext
   ): Promise<string[]> {
+    if (!tenantId) {
+      throw new ValidationError('Tenant context is required to manage price-list relations');
+    }
     await this.get(tenantId, id);
     await this.assertAllExist(
       this.marketplaceRepository,
@@ -75,10 +81,10 @@ export class PriceListService extends CrudService<any> {
     );
 
     await this.prisma.$transaction(async (tx: any) => {
-      await tx.priceListMarketplace.deleteMany({ where: { priceListId: id } });
+      await tx.priceListMarketplace.deleteMany({ where: { tenantId, priceListId: id } });
       if (marketplaceIds.length > 0) {
         await tx.priceListMarketplace.createMany({
-          data: marketplaceIds.map((marketplaceId) => ({ priceListId: id, marketplaceId }))
+          data: marketplaceIds.map((marketplaceId) => ({ tenantId, priceListId: id, marketplaceId }))
         });
       }
     });

@@ -32,8 +32,8 @@ export async function seedDemoRelations(
       await ensureJoin(
         prisma,
         'priceListProduct',
-        { priceListId: priceList.id, productId: product.id },
-        { priceListId: priceList.id, productId: product.id }
+        { tenantId: priceList.tenantId, priceListId: priceList.id, productId: product.id },
+        { tenantId: priceList.tenantId, priceListId: priceList.id, productId: product.id }
       );
       productLinks += 1;
     }
@@ -42,8 +42,8 @@ export async function seedDemoRelations(
       await ensureJoin(
         prisma,
         'priceListMarketplace',
-        { priceListId: priceList.id, marketplaceId: marketplace.id },
-        { priceListId: priceList.id, marketplaceId: marketplace.id }
+        { tenantId: priceList.tenantId, priceListId: priceList.id, marketplaceId: marketplace.id },
+        { tenantId: priceList.tenantId, priceListId: priceList.id, marketplaceId: marketplace.id }
       );
       marketplaceLinks += 1;
     }

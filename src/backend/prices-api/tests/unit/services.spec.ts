@@ -720,6 +720,35 @@ describe('DiscountService', () => {
 
     const updated: any = await service.update(TENANT, created.id, { value: 25 }, ACTOR);
     expect(Number(updated.value)).toBe(25);
+    expect(updated.priceListId).toBeNull();
+    expect(updated.marketplaceId).toBeNull();
+  });
+
+  it('rejects a partial update that supplies a reference for another scope', async () => {
+    const { service } = build();
+    const created: any = await service.create(TENANT, { ...baseDiscount }, ACTOR);
+
+    await expect(service.update(TENANT, created.id, { marketplaceId: 'mkt-other' }, ACTOR)).rejects.toBeInstanceOf(
+      ValidationError
+    );
+  });
+
+  it('clears the previous reference when changing scope', async () => {
+    const { service, prisma } = build();
+    prisma.__store.priceList.push({ id: 'list-1', tenantId: TENANT, name: 'Retail', deletedAt: null });
+    const created: any = await service.create(TENANT, { ...baseDiscount }, ACTOR);
+
+    const updated: any = await service.update(
+      TENANT,
+      created.id,
+      { appliesTo: 'price_list', priceListId: 'list-1' },
+      ACTOR
+    );
+
+    expect(updated.appliesTo).toBe('price_list');
+    expect(updated.productId).toBeNull();
+    expect(updated.priceListId).toBe('list-1');
+    expect(updated.marketplaceId).toBeNull();
   });
 });
 
@@ -733,9 +762,13 @@ describe('PriceListService', () => {
       priceList: [{ id: 'list-1', tenantId: TENANT, name: 'Retail', status: 'active', deletedAt: null }],
       product: [
         { id: 'prod-1', tenantId: TENANT, sku: 'A', name: 'A', deletedAt: null },
-        { id: 'prod-2', tenantId: TENANT, sku: 'B', name: 'B', deletedAt: null }
+        { id: 'prod-2', tenantId: TENANT, sku: 'B', name: 'B', deletedAt: null },
+        { id: 'prod-other', tenantId: OTHER_TENANT, sku: 'X', name: 'Other', deletedAt: null }
       ],
-      marketplace: [{ id: 'mkt-1', tenantId: TENANT, name: 'Amazon', code: 'amazon', deletedAt: null }],
+      marketplace: [
+        { id: 'mkt-1', tenantId: TENANT, name: 'Amazon', code: 'amazon', deletedAt: null },
+        { id: 'mkt-other', tenantId: OTHER_TENANT, name: 'Other', code: 'mercadolibre', deletedAt: null }
+      ],
       priceListProduct: [],
       priceListMarketplace: []
     });
@@ -750,6 +783,7 @@ describe('PriceListService', () => {
 
     expect(result).toEqual(['prod-1', 'prod-2']);
     expect(prisma.__store.priceListProduct).toHaveLength(2);
+    expect(prisma.__store.priceListProduct.every((row: any) => row.tenantId === TENANT)).toBe(true);
 
     await service.setProducts(TENANT, 'list-1', ['prod-1'], ACTOR);
     expect(prisma.__store.priceListProduct).toHaveLength(1);
@@ -759,6 +793,7 @@ describe('PriceListService', () => {
     const { service, prisma } = build();
     await service.setMarketplaces(TENANT, 'list-1', ['mkt-1'], ACTOR);
     expect(prisma.__store.priceListMarketplace).toHaveLength(1);
+    expect(prisma.__store.priceListMarketplace[0].tenantId).toBe(TENANT);
   });
 
   it('rejects unknown product ids', async () => {
@@ -768,9 +803,23 @@ describe('PriceListService', () => {
     );
   });
 
+  it('rejects a product from another company', async () => {
+    const { service } = build();
+    await expect(service.setProducts(TENANT, 'list-1', ['prod-other'], ACTOR)).rejects.toBeInstanceOf(
+      ValidationError
+    );
+  });
+
   it('rejects unknown marketplace ids', async () => {
     const { service } = build();
     await expect(service.setMarketplaces(TENANT, 'list-1', ['ghost'], ACTOR)).rejects.toBeInstanceOf(
+      ValidationError
+    );
+  });
+
+  it('rejects a marketplace from another company', async () => {
+    const { service } = build();
+    await expect(service.setMarketplaces(TENANT, 'list-1', ['mkt-other'], ACTOR)).rejects.toBeInstanceOf(
       ValidationError
     );
   });
