@@ -367,6 +367,25 @@ Every write stamps `created_by` / `created_by_type` and `updated_by` / `updated_
 (`user`, `api_key` or `system`), including the services that use Prisma directly
 (role creation, price creation and price history).
 
+**Price catalog access and exports**
+
+- The `price_catalog_viewer` role can read and export only the price lists
+  explicitly assigned to its user.
+- Company administrators manage assignments from the Users module; assignments
+  are stored with tenant-safe composite foreign keys.
+- Company administrators also assign active marketplaces to each price list
+  from the Price Lists module; only those list-marketplace combinations are
+  available in the catalog selector.
+- The read-only catalog requires both a price list and a marketplace because a
+  single product can have different prices per marketplace.
+- Catalog results calculate the current applicable discount through the pricing
+  engine instead of trusting a previously stored final price.
+- CSV, JSON, and TXT exports are persisted as queued jobs and processed by the
+  separate worker: `npm run worker:exports`.
+- Development artifacts use `EXPORT_DIRECTORY`; production should provide an
+  object-storage implementation through the export storage adapter. Jobs expire
+  after `EXPORT_RETENTION_HOURS` (24 hours by default).
+
 ---
 
 ## API reference

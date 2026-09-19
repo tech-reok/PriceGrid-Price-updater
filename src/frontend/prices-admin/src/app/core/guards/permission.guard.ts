@@ -12,6 +12,7 @@ export function permissionGuard(permission: string): CanActivateFn {
     const router = inject(Router);
 
     if (session.hasPermission(permission)) return true;
+    if (session.hasPermission('price-catalog:read')) return router.createUrlTree(['/price-catalog']);
     return router.createUrlTree(['/dashboard']);
   };
 }
@@ -21,5 +22,7 @@ export const globalAdminGuard: CanActivateFn = () => {
   const session = inject(SessionStore);
   const router = inject(Router);
 
-  return session.isGlobalAdmin() ? true : router.createUrlTree(['/dashboard']);
+  return session.isGlobalAdmin()
+    ? true
+    : router.createUrlTree(session.hasPermission('price-catalog:read') ? ['/price-catalog'] : ['/dashboard']);
 };

@@ -18,7 +18,9 @@ export const FAKE_MODELS = [
   'priceListMarketplace',
   'price',
   'priceHistory',
-  'discount'
+  'discount',
+  'userPriceListAccess',
+  'exportRequest'
 ];
 
 function valueOf(row: Row, path: string): any {
@@ -157,6 +159,15 @@ const BELONGS_TO: Record<string, Record<string, [string, string, string]>> = {
     marketplace: ['marketplace', 'marketplaceId', 'id'],
     priceList: ['priceList', 'priceListId', 'id']
   },
+  userPriceListAccess: {
+    priceList: ['priceList', 'priceListId', 'id'],
+    user: ['user', 'userId', 'id']
+  },
+  exportRequest: {
+    priceList: ['priceList', 'priceListId', 'id'],
+    marketplace: ['marketplace', 'marketplaceId', 'id'],
+    requestedByUser: ['user', 'requestedByUserId', 'id']
+  },
   tenant: { currency: ['currency', 'defaultCurrency', 'code'] }
 };
 
@@ -243,7 +254,15 @@ export function createFakePrisma(initial: Record<string, Row[]> = {}): any {
 
     delegate.updateMany = async ({ where, data }: any = {}) => {
       const found = rows().filter((row) => matchWhere(row, where));
-      found.forEach((row) => Object.assign(row, data));
+      found.forEach((row) => {
+        for (const [field, value] of Object.entries(data ?? {})) {
+          if (value && typeof value === 'object' && 'increment' in value) {
+            row[field] = Number(row[field] ?? 0) + Number((value as any).increment);
+          } else {
+            row[field] = value;
+          }
+        }
+      });
       return { count: found.length };
     };
 

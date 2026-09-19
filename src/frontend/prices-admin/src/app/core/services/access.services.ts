@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CrudResource } from './crud-resource';
-import type { Role, Tenant, User } from '../models';
+import type { PriceListAccess, Role, Tenant, User } from '../models';
 
 /** Companies (tenants). Only the global admin can create/update/delete. */
 @Injectable({ providedIn: 'root' })
@@ -20,6 +20,14 @@ export class TenantService extends CrudResource<Tenant> {
 export class UserService extends CrudResource<User> {
   constructor(http: HttpClient) {
     super(http, 'users');
+  }
+
+  priceListAccess(id: string) {
+    return this.http.get<PriceListAccess>(`${this.baseUrl}/${id}/price-list-access`);
+  }
+
+  assignPriceLists(id: string, priceListIds: string[]) {
+    return this.http.put<PriceListAccess>(`${this.baseUrl}/${id}/price-list-access`, { priceListIds });
   }
 }
 

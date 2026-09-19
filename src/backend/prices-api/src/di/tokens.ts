@@ -32,6 +32,10 @@ export const TOKENS = {
   CurrencyService: 'CurrencyService',
   PermissionService: 'PermissionService',
   DashboardService: 'DashboardService',
+  PriceListAccessService: 'PriceListAccessService',
+  PriceCatalogService: 'PriceCatalogService',
+  ExportService: 'ExportService',
+  ExportStorage: 'ExportStorage',
 
   // Controllers
   AuthController: 'AuthController',
@@ -48,6 +52,8 @@ export const TOKENS = {
   CurrencyController: 'CurrencyController',
   PermissionController: 'PermissionController',
   DashboardController: 'DashboardController',
+  PriceCatalogController: 'PriceCatalogController',
+  ExportController: 'ExportController',
   ExternalController: 'ExternalController'
 } as const;
 

@@ -5,6 +5,9 @@ node_modules/
 dist/
 coverage/
 
+# Locally generated catalog exports
+src/backend/prices-api/storage/
+
 # Local environment files (never commit real secrets)
 .env
 .env.local

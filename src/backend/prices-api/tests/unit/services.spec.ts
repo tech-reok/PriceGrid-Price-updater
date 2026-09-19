@@ -7,6 +7,8 @@ import { RoleService } from '../../src/services/role.service';
 import { ApiKeyService } from '../../src/services/api-key.service';
 import { PriceService } from '../../src/services/price.service';
 import { PriceListService } from '../../src/services/price-list.service';
+import { PriceListAccessService } from '../../src/services/price-list-access.service';
+import { PriceCatalogService } from '../../src/services/price-catalog.service';
 import { DiscountService } from '../../src/services/discount.service';
 import { DashboardService } from '../../src/services/dashboard.service';
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '../../src/common/errors';
@@ -834,6 +836,89 @@ describe('PriceListService', () => {
     await service.setProducts(TENANT, 'list-1', ['prod-1'], ACTOR);
     await service.setProducts(TENANT, 'list-1', [], ACTOR);
     expect(prisma.__store.priceListProduct).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Catalog access and read model
+// ---------------------------------------------------------------------------
+
+describe('PriceListAccessService', () => {
+  function build() {
+    const prisma = createFakePrisma({
+      user: [
+        { id: 'user-1', tenantId: TENANT, name: 'Viewer', deletedAt: null },
+        { id: 'user-other', tenantId: OTHER_TENANT, name: 'Other', deletedAt: null }
+      ],
+      priceList: [
+        { id: 'list-1', tenantId: TENANT, name: 'Retail', status: 'active', deletedAt: null },
+        { id: 'list-2', tenantId: TENANT, name: 'Wholesale', status: 'active', deletedAt: null },
+        { id: 'list-other', tenantId: OTHER_TENANT, name: 'Other', status: 'active', deletedAt: null }
+      ],
+      userPriceListAccess: []
+    });
+    return { prisma, service: new PriceListAccessService(prisma) };
+  }
+
+  it('replaces assignments and keeps them tenant-scoped', async () => {
+    const { service, prisma } = build();
+    const result = await service.replace(TENANT, 'user-1', ['list-1', 'list-2'], ACTOR);
+
+    expect(result.priceListIds).toEqual(['list-1', 'list-2']);
+    expect(prisma.__store.userPriceListAccess).toHaveLength(2);
+    expect(prisma.__store.userPriceListAccess.every((row: any) => row.tenantId === TENANT)).toBe(true);
+    expect(prisma.__store.userPriceListAccess.every((row: any) => row.createdBy === ACTOR.id)).toBe(true);
+    expect(prisma.__store.userPriceListAccess.every((row: any) => row.updatedBy === undefined)).toBe(true);
+  });
+
+  it('rejects a list from another company', async () => {
+    const { service } = build();
+    await expect(service.replace(TENANT, 'user-1', ['list-other'], ACTOR)).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it('returns only assigned lists to a restricted user', async () => {
+    const { service } = build();
+    await service.replace(TENANT, 'user-1', ['list-2'], ACTOR);
+    const user: any = { id: 'user-1', permissions: ['price-catalog:read'], isGlobalAdmin: false };
+
+    await expect(service.visiblePriceLists(TENANT, user)).resolves.toMatchObject([{ id: 'list-2' }]);
+  });
+});
+
+describe('PriceCatalogService', () => {
+  it('calculates the applied discount for the selected list and marketplace', async () => {
+    const prisma = createFakePrisma({
+      priceList: [{ id: 'list-1', tenantId: TENANT, name: 'Retail', status: 'active', deletedAt: null }],
+      marketplace: [{ id: 'mkt-1', tenantId: TENANT, name: 'Amazon', code: 'amazon', status: 'active', deletedAt: null }],
+      priceListMarketplace: [{ tenantId: TENANT, priceListId: 'list-1', marketplaceId: 'mkt-1' }],
+      userPriceListAccess: [{ tenantId: TENANT, userId: 'user-1', priceListId: 'list-1' }],
+      product: [{ id: 'prod-1', tenantId: TENANT, sku: 'SKU-1', name: 'Coffee', status: 'active', deletedAt: null }],
+      currency: [{ code: 'MXN', decimals: 2, status: 'active', deletedAt: null }],
+      price: [{
+        id: 'price-1', tenantId: TENANT, productId: 'prod-1', priceListId: 'list-1', marketplaceId: 'mkt-1',
+        basePrice: 100, currencyCode: 'MXN', status: 'active', deletedAt: null,
+        startDate: new Date('2024-01-01'), endDate: null, updatedAt: new Date('2024-01-01'),
+        priceList: { id: 'list-1', name: 'Retail' },
+        marketplace: { id: 'mkt-1', name: 'Amazon', code: 'amazon' },
+        product: { id: 'prod-1', sku: 'SKU-1', name: 'Coffee' }
+      }],
+      discount: [{
+        id: 'discount-1', tenantId: TENANT, name: 'Product discount', type: 'percentage', value: 10,
+        appliesTo: 'product', productId: 'prod-1', priceListId: null, marketplaceId: null,
+        priority: 1, status: 'active', deletedAt: null, startDate: new Date('2024-01-01'), endDate: null,
+        createdAt: new Date('2024-01-01')
+      }]
+    });
+    const access = new PriceListAccessService(prisma);
+    const service = new PriceCatalogService(prisma, access);
+    const user: any = { id: 'user-1', permissions: ['price-catalog:read'], isGlobalAdmin: false };
+
+    const result = await service.list(TENANT, user, {
+      page: 1, limit: 20, order: 'asc', priceListId: 'list-1', marketplaceId: 'mkt-1'
+    });
+
+    expect(result.data[0]).toMatchObject({ basePrice: 100, discountAmount: 10, finalPrice: 90 });
+    expect(result.data[0].appliedDiscount.name).toBe('Product discount');
   });
 });
 

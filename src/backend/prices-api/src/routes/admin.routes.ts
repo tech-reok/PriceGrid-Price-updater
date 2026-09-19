@@ -14,6 +14,8 @@ import type { ApiKeyController } from '../controllers/api-key.controller';
 import type { TenantController } from '../controllers/tenant.controller';
 import type { PriceController } from '../controllers/price.controller';
 import type { DashboardController } from '../controllers/dashboard.controller';
+import type { PriceCatalogController } from '../controllers/price-catalog.controller';
+import type { ExportController } from '../controllers/export.controller';
 import {
   assignPermissionsSchema,
   createApiKeySchema,
@@ -39,6 +41,12 @@ import {
   updatePriceSchema,
   updateProductSchema
 } from '../validators/pricing.validators';
+import {
+  catalogMarketplacesQuerySchema,
+  catalogQuerySchema,
+  exportRequestSchema,
+  priceListAccessSchema
+} from '../validators/catalog.validators';
 
 /** Administrative API (JWT + tenant context + RBAC). */
 export function createAdminRouter(): Router {
@@ -47,6 +55,8 @@ export function createAdminRouter(): Router {
   const authService = container.resolve<AuthService>(TOKENS.AuthService);
   const jwtAuth = createJwtAuthMiddleware(authService);
   const guards = [jwtAuth, resolveTenant, requireTenantContext];
+  const priceCatalogController = container.resolve<PriceCatalogController>(TOKENS.PriceCatalogController);
+  const exportController = container.resolve<ExportController>(TOKENS.ExportController);
 
   const crud = (token: string): CrudController =>
     createCrudController(container.resolve<any>(token));
@@ -97,6 +107,66 @@ export function createAdminRouter(): Router {
       createValidators: [validate(createUserSchema)],
       updateValidators: [validate(updateUserSchema)]
     })
+  );
+
+  router.get(
+    '/users/:id/price-list-access',
+    ...guards,
+    requirePermission('price-list-access:read'),
+    priceCatalogController.access
+  );
+  router.put(
+    '/users/:id/price-list-access',
+    ...guards,
+    requirePermission('price-list-access:manage'),
+    validate(priceListAccessSchema),
+    priceCatalogController.replaceAccess
+  );
+
+  router.get(
+    '/price-catalog/price-lists',
+    ...guards,
+    requirePermission('price-catalog:read'),
+    priceCatalogController.priceLists
+  );
+  router.get(
+    '/price-catalog/marketplaces',
+    ...guards,
+    requirePermission('price-catalog:read'),
+    validate(catalogMarketplacesQuerySchema, 'query'),
+    priceCatalogController.marketplaces
+  );
+  router.get(
+    '/price-catalog',
+    ...guards,
+    requirePermission('price-catalog:read'),
+    validate(catalogQuerySchema, 'query'),
+    priceCatalogController.list
+  );
+  router.post(
+    '/price-catalog/exports',
+    ...guards,
+    requirePermission('price-catalog:export'),
+    validate(exportRequestSchema),
+    exportController.create
+  );
+  router.get(
+    '/price-catalog/exports',
+    ...guards,
+    requirePermission('price-catalog:export'),
+    exportController.list
+  );
+  router.get(
+    '/price-catalog/exports/:id',
+    ...guards,
+    requirePermission('price-catalog:export'),
+    exportController.get
+  );
+  router.get(
+    '/price-catalog/exports/:id/download',
+    ...guards,
+    requirePermission('price-catalog:export'),
+    exportController.download
   );
 
   // --- Roles (+ permissions assignment) ------------------------------------

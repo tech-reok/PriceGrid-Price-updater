@@ -17,6 +17,8 @@ import { PriceService } from '../services/price.service';
 import { PriceListService } from '../services/price-list.service';
 import { DiscountService } from '../services/discount.service';
 import { DashboardService } from '../services/dashboard.service';
+import { PriceListAccessService } from '../services/price-list-access.service';
+import { PriceCatalogService } from '../services/price-catalog.service';
 
 import { AuthController } from '../controllers/auth.controller';
 import { TenantController } from '../controllers/tenant.controller';
@@ -25,6 +27,10 @@ import { PriceController } from '../controllers/price.controller';
 import { DashboardController } from '../controllers/dashboard.controller';
 import { RoleController } from '../controllers/role.controller';
 import { PriceListController } from '../controllers/price-list.controller';
+import { PriceCatalogController } from '../controllers/price-catalog.controller';
+import { ExportController } from '../controllers/export.controller';
+import { ExportService } from '../services/export.service';
+import { LocalExportStorage } from '../services/export.storage';
 
 /**
  * Composition root. Repositories and generic services are registered as
@@ -68,6 +74,10 @@ export function buildContainer(prisma: PrismaClient = new PrismaClient()): Depen
   container.register(TOKENS.PriceListService, { useClass: PriceListService });
   container.register(TOKENS.DiscountService, { useClass: DiscountService });
   container.register(TOKENS.DashboardService, { useClass: DashboardService });
+  container.register(TOKENS.PriceListAccessService, { useClass: PriceListAccessService });
+  container.register(TOKENS.PriceCatalogService, { useClass: PriceCatalogService });
+  container.registerInstance(TOKENS.ExportStorage, new LocalExportStorage());
+  container.register(TOKENS.ExportService, { useClass: ExportService });
 
   // --- Controllers ---------------------------------------------------------
   container.register(TOKENS.AuthController, { useClass: AuthController });
@@ -77,6 +87,8 @@ export function buildContainer(prisma: PrismaClient = new PrismaClient()): Depen
   container.register(TOKENS.DashboardController, { useClass: DashboardController });
   container.register(TOKENS.RoleController, { useClass: RoleController });
   container.register(TOKENS.PriceListController, { useClass: PriceListController });
+  container.register(TOKENS.PriceCatalogController, { useClass: PriceCatalogController });
+  container.register(TOKENS.ExportController, { useClass: ExportController });
 
   return container;
 }

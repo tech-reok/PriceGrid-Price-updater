@@ -43,6 +43,7 @@ export class ShellComponent implements OnInit {
   /** Sidebar modules, in the order defined by the plan. */
   private readonly allNavItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: 'layout-dashboard', permission: 'dashboard:read' },
+    { label: 'Catálogo de precios', path: '/price-catalog', icon: 'scan-search', permission: 'price-catalog:read' },
     { label: 'Empresas', path: '/companies', icon: 'building-2', permission: 'tenants:read', globalOnly: true },
     { label: 'Productos', path: '/products', icon: 'package', permission: 'products:read' },
     { label: 'Listas de precios', path: '/price-lists', icon: 'tags', permission: 'price-lists:read' },

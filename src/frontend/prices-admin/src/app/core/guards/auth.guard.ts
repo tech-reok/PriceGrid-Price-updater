@@ -32,5 +32,7 @@ export const guestGuard: CanActivateFn = () => {
   const session = inject(SessionStore);
   const router = inject(Router);
 
-  return session.isAuthenticated() ? router.createUrlTree(['/dashboard']) : true;
+  return session.isAuthenticated()
+    ? router.createUrlTree(session.hasPermission('price-catalog:read') ? ['/price-catalog'] : ['/dashboard'])
+    : true;
 };

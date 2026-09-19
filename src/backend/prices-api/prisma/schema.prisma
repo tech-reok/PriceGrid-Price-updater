@@ -43,6 +43,20 @@ enum DiscountScope {
   marketplace
 }
 
+enum ExportFormat {
+  csv
+  json
+  txt
+}
+
+enum ExportStatus {
+  queued
+  processing
+  completed
+  failed
+  expired
+}
+
 // ---------------------------------------------------------------------------
 // Global catalogs
 // ---------------------------------------------------------------------------
@@ -120,6 +134,8 @@ model Tenant {
   priceLists            PriceList[]
   priceListProducts     PriceListProduct[]
   priceListMarketplaces PriceListMarketplace[]
+  userPriceListAccess   UserPriceListAccess[]
+  exportRequests        ExportRequest[]
   prices                Price[]
   discounts             Discount[]
   priceHistory          PriceHistory[]
@@ -186,10 +202,13 @@ model User {
   updatedBy     String?    @map("updated_by") @db.VarChar(36)
   updatedByType ActorType? @map("updated_by_type")
 
-  tenant        Tenant?        @relation(fields: [tenantId], references: [id])
-  role          Role           @relation(fields: [roleId], references: [id])
-  refreshTokens RefreshToken[]
+  tenant          Tenant?               @relation(fields: [tenantId], references: [id])
+  role            Role                  @relation(fields: [roleId], references: [id])
+  refreshTokens   RefreshToken[]
+  priceListAccess UserPriceListAccess[]
+  exportRequests  ExportRequest[]
 
+  @@unique([tenantId, id])
   @@index([tenantId])
   @@map("users")
 }
@@ -294,6 +313,7 @@ model Marketplace {
   prices                Price[]
   priceListMarketplaces PriceListMarketplace[]
   discounts             Discount[]
+  exportRequests        ExportRequest[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, id])
@@ -323,6 +343,8 @@ model PriceList {
   priceListProducts     PriceListProduct[]
   priceListMarketplaces PriceListMarketplace[]
   discounts             Discount[]
+  userAccess            UserPriceListAccess[]
+  exportRequests        ExportRequest[]
 
   @@unique([tenantId, name])
   @@unique([tenantId, id])
@@ -453,4 +475,61 @@ model Discount {
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("discounts")
+}
+
+model UserPriceListAccess {
+  tenantId      String     @map("tenant_id") @db.VarChar(36)
+  userId        String     @map("user_id") @db.VarChar(36)
+  priceListId   String     @map("price_list_id") @db.VarChar(36)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Cascade)
+  priceList PriceList @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, userId, priceListId])
+  @@index([tenantId, userId])
+  @@index([tenantId, priceListId])
+  @@map("user_price_list_access")
+}
+
+model ExportRequest {
+  id                String       @id @default(uuid()) @db.VarChar(36)
+  tenantId          String       @map("tenant_id") @db.VarChar(36)
+  requestedByUserId String       @map("requested_by_user_id") @db.VarChar(36)
+  priceListId       String       @map("price_list_id") @db.VarChar(36)
+  marketplaceId     String       @map("marketplace_id") @db.VarChar(36)
+  format            ExportFormat
+  filters           Json?
+  status            ExportStatus @default(queued)
+  attemptCount      Int          @default(0) @map("attempt_count")
+  maxAttempts       Int          @default(3) @map("max_attempts")
+  lockedAt          DateTime?    @map("locked_at") @db.DateTime(3)
+  lockedBy          String?      @map("locked_by") @db.VarChar(100)
+  startedAt         DateTime?    @map("started_at") @db.DateTime(3)
+  completedAt       DateTime?    @map("completed_at") @db.DateTime(3)
+  expiresAt         DateTime?    @map("expires_at") @db.DateTime(3)
+  storageKey        String?      @map("storage_key") @db.VarChar(500)
+  fileName          String?      @map("file_name") @db.VarChar(255)
+  contentType       String?      @map("content_type") @db.VarChar(120)
+  byteSize          Int?         @map("byte_size")
+  checksum          String?      @db.VarChar(128)
+  errorCode         String?      @map("error_code") @db.VarChar(80)
+  errorMessage      String?      @map("error_message") @db.VarChar(1000)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.DateTime(3)
+  createdBy         String?      @map("created_by") @db.VarChar(36)
+  createdByType     ActorType?   @map("created_by_type")
+
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedByUser User        @relation(fields: [tenantId, requestedByUserId], references: [tenantId, id], onDelete: Cascade)
+  priceList       PriceList   @relation(fields: [tenantId, priceListId], references: [tenantId, id], onDelete: Cascade)
+  marketplace     Marketplace @relation(fields: [tenantId, marketplaceId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([tenantId, requestedByUserId, createdAt])
+  @@index([expiresAt])
+  @@map("export_requests")
 }
