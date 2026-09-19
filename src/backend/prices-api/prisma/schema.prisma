@@ -1,0 +1,448 @@
+// PriceGrid — Prisma schema (MySQL, multi-tenant, single shared database)
+// Migrations own the STRUCTURE; seeds own the initial DATA (see prisma/seed).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ActorType {
+  user
+  api_key
+  system
+}
+
+enum RecordStatus {
+  active
+  inactive
+}
+
+enum ApiKeyStatus {
+  active
+  revoked
+}
+
+enum MarketplaceCode {
+  amazon
+  mercadolibre
+  own_store
+}
+
+enum DiscountType {
+  percentage
+  fixed
+}
+
+enum DiscountScope {
+  product
+  price_list
+  marketplace
+}
+
+// ---------------------------------------------------------------------------
+// Global catalogs
+// ---------------------------------------------------------------------------
+
+model Currency {
+  id       String       @id @default(uuid()) @db.VarChar(36)
+  code     String       @unique @db.Char(3)
+  name     String       @db.VarChar(100)
+  symbol   String       @db.VarChar(10)
+  decimals Int          @default(2)
+  status   RecordStatus @default(active)
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  tenants    Tenant[]
+  products   Product[]
+  prices     Price[]
+  priceLists PriceList[]
+
+  @@map("currencies")
+}
+
+model Permission {
+  id          String  @id @default(uuid()) @db.VarChar(36)
+  name        String  @db.VarChar(150)
+  slug        String  @unique @db.VarChar(100)
+  description String? @db.VarChar(255)
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Tenants (companies)
+// ---------------------------------------------------------------------------
+
+model Tenant {
+  id              String       @id @default(uuid()) @db.VarChar(36)
+  commercialName  String       @map("commercial_name") @db.VarChar(150)
+  legalName       String       @map("legal_name") @db.VarChar(200)
+  slug            String       @unique @db.VarChar(100)
+  status          RecordStatus @default(active)
+  defaultCurrency String       @map("default_currency") @db.Char(3)
+  notes           String?      @db.Text
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  currency        Currency        @relation(fields: [defaultCurrency], references: [code])
+  users           User[]
+  roles           Role[]
+  apiKeys         ApiKey[]
+  products        Product[]
+  marketplaces    Marketplace[]
+  priceLists      PriceList[]
+  prices          Price[]
+  discounts       Discount[]
+  priceHistory    PriceHistory[]
+
+  @@map("tenants")
+}
+
+// ---------------------------------------------------------------------------
+// Access control
+// ---------------------------------------------------------------------------
+
+model Role {
+  id          String       @id @default(uuid()) @db.VarChar(36)
+  tenantId    String?      @map("tenant_id") @db.VarChar(36)
+  name        String       @db.VarChar(100)
+  slug        String       @db.VarChar(100)
+  description String?      @db.VarChar(255)
+  isSystem    Boolean      @default(false) @map("is_system")
+  status      RecordStatus @default(active)
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id])
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.VarChar(36)
+  permissionId String @map("permission_id") @db.VarChar(36)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.VarChar(36)
+  tenantId     String?      @map("tenant_id") @db.VarChar(36)
+  name         String       @db.VarChar(150)
+  email        String       @unique @db.VarChar(190)
+  passwordHash String       @map("password_hash") @db.VarChar(255)
+  roleId       String       @map("role_id") @db.VarChar(36)
+  status       RecordStatus @default(active)
+  lastLoginAt  DateTime?    @map("last_login_at") @db.DateTime(3)
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  tenant        Tenant?        @relation(fields: [tenantId], references: [id])
+  role          Role           @relation(fields: [roleId], references: [id])
+  refreshTokens RefreshToken[]
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.VarChar(36)
+  userId       String    @map("user_id") @db.VarChar(36)
+  tokenHash    String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt    DateTime  @map("expires_at") @db.DateTime(3)
+  revokedAt    DateTime? @map("revoked_at") @db.DateTime(3)
+  replacedById String?   @map("replaced_by_id") @db.VarChar(36)
+  userAgent    String?   @map("user_agent") @db.VarChar(255)
+  ip           String?   @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model ApiKey {
+  id         String       @id @default(uuid()) @db.VarChar(36)
+  tenantId   String       @map("tenant_id") @db.VarChar(36)
+  name       String       @db.VarChar(150)
+  keyHash    String       @map("key_hash") @db.VarChar(255)
+  prefix     String       @db.VarChar(16)
+  scopes     Json
+  status     ApiKeyStatus @default(active)
+  expiresAt  DateTime?    @map("expires_at") @db.DateTime(3)
+  revokedAt  DateTime?    @map("revoked_at") @db.DateTime(3)
+  lastUsedAt DateTime?    @map("last_used_at") @db.DateTime(3)
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------------
+// Business entities (tenant-scoped)
+// ---------------------------------------------------------------------------
+
+model Product {
+  id          String       @id @default(uuid()) @db.VarChar(36)
+  tenantId    String       @map("tenant_id") @db.VarChar(36)
+  sku         String       @db.VarChar(64)
+  name        String       @db.VarChar(200)
+  description String?      @db.Text
+  basePrice   Decimal      @map("base_price") @db.Decimal(12, 2)
+  currencyCode String      @map("currency_code") @db.Char(3)
+  status      RecordStatus @default(active)
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  currency         Currency           @relation(fields: [currencyCode], references: [code])
+  prices           Price[]
+  priceListProducts PriceListProduct[]
+  discounts        Discount[]
+  priceHistory     PriceHistory[]
+
+  @@unique([tenantId, sku])
+  // Enables composite (tenant-safe) foreign keys from Price / PriceHistory.
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("products")
+}
+
+model Marketplace {
+  id       String          @id @default(uuid()) @db.VarChar(36)
+  tenantId String          @map("tenant_id") @db.VarChar(36)
+  name     String          @db.VarChar(150)
+  code     MarketplaceCode
+  config   Json?
+  status   RecordStatus    @default(active)
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  tenant                  Tenant                   @relation(fields: [tenantId], references: [id])
+  prices                  Price[]
+  priceListMarketplaces   PriceListMarketplace[]
+  discounts               Discount[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("marketplaces")
+}
+
+model PriceList {
+  id           String       @id @default(uuid()) @db.VarChar(36)
+  tenantId     String       @map("tenant_id") @db.VarChar(36)
+  name         String       @db.VarChar(150)
+  description  String?      @db.VarChar(255)
+  currencyCode String?      @map("currency_code") @db.Char(3)
+  status       RecordStatus @default(active)
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id])
+  currency              Currency?              @relation(fields: [currencyCode], references: [code])
+  prices                Price[]
+  priceListProducts     PriceListProduct[]
+  priceListMarketplaces PriceListMarketplace[]
+  discounts             Discount[]
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@map("price_lists")
+}
+
+model PriceListProduct {
+  priceListId String @map("price_list_id") @db.VarChar(36)
+  productId   String @map("product_id") @db.VarChar(36)
+
+  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([priceListId, productId])
+  @@map("price_list_products")
+}
+
+model PriceListMarketplace {
+  priceListId   String @map("price_list_id") @db.VarChar(36)
+  marketplaceId String @map("marketplace_id") @db.VarChar(36)
+
+  priceList   PriceList   @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  marketplace Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+
+  @@id([priceListId, marketplaceId])
+  @@map("price_list_marketplaces")
+}
+
+model Price {
+  id            String       @id @default(uuid()) @db.VarChar(36)
+  tenantId      String       @map("tenant_id") @db.VarChar(36)
+  productId     String       @map("product_id") @db.VarChar(36)
+  priceListId   String       @map("price_list_id") @db.VarChar(36)
+  marketplaceId String       @map("marketplace_id") @db.VarChar(36)
+  basePrice     Decimal      @map("base_price") @db.Decimal(12, 2)
+  currencyCode  String       @map("currency_code") @db.Char(3)
+  finalPrice    Decimal      @map("final_price") @db.Decimal(12, 2)
+  startDate     DateTime     @map("start_date") @db.DateTime(3)
+  endDate       DateTime?    @map("end_date") @db.DateTime(3)
+  status        RecordStatus @default(active)
+  notes         String?      @db.Text
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  // Composite foreign keys keep the product, price list and marketplace inside
+  // the same tenant at the database level (defense in depth, alongside the
+  // service-level validation).
+  tenant      Tenant         @relation(fields: [tenantId], references: [id])
+  product     Product        @relation(fields: [tenantId, productId], references: [tenantId, id])
+  priceList   PriceList      @relation(fields: [tenantId, priceListId], references: [tenantId, id])
+  marketplace Marketplace    @relation(fields: [tenantId, marketplaceId], references: [tenantId, id])
+  currency    Currency       @relation(fields: [currencyCode], references: [code])
+  history     PriceHistory[]
+
+  @@unique([tenantId, productId, priceListId, marketplaceId, startDate])
+  @@unique([tenantId, id])
+  @@index([tenantId])
+  @@index([tenantId, productId])
+  @@map("prices")
+}
+
+model PriceHistory {
+  id           String    @id @default(uuid()) @db.VarChar(36)
+  tenantId     String    @map("tenant_id") @db.VarChar(36)
+  priceId      String    @map("price_id") @db.VarChar(36)
+  productId    String    @map("product_id") @db.VarChar(36)
+  oldBasePrice Decimal?  @map("old_base_price") @db.Decimal(12, 2)
+  newBasePrice Decimal?  @map("new_base_price") @db.Decimal(12, 2)
+  oldFinalPrice Decimal? @map("old_final_price") @db.Decimal(12, 2)
+  newFinalPrice Decimal? @map("new_final_price") @db.Decimal(12, 2)
+  changedByType ActorType @map("changed_by_type")
+  changedById   String?   @map("changed_by_id") @db.VarChar(36)
+  reason        String    @db.VarChar(40)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  price   Price   @relation(fields: [tenantId, priceId], references: [tenantId, id], onDelete: Cascade)
+  product Product @relation(fields: [tenantId, productId], references: [tenantId, id])
+
+  @@index([tenantId])
+  @@index([tenantId, priceId])
+  @@map("price_history")
+}
+
+model Discount {
+  id            String        @id @default(uuid()) @db.VarChar(36)
+  tenantId      String        @map("tenant_id") @db.VarChar(36)
+  name          String        @db.VarChar(150)
+  type          DiscountType
+  value         Decimal       @db.Decimal(12, 2)
+  appliesTo     DiscountScope @map("applies_to")
+  productId     String?       @map("product_id") @db.VarChar(36)
+  priceListId   String?       @map("price_list_id") @db.VarChar(36)
+  marketplaceId String?       @map("marketplace_id") @db.VarChar(36)
+  startDate     DateTime      @map("start_date") @db.DateTime(3)
+  endDate       DateTime?     @map("end_date") @db.DateTime(3)
+  priority      Int           @default(100)
+  status        RecordStatus  @default(active)
+  description   String?       @db.Text
+
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(3)
+  createdBy     String?    @map("created_by") @db.VarChar(36)
+  createdByType ActorType? @map("created_by_type")
+  updatedBy     String?    @map("updated_by") @db.VarChar(36)
+  updatedByType ActorType? @map("updated_by_type")
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  product     Product?     @relation(fields: [productId], references: [id])
+  priceList   PriceList?   @relation(fields: [priceListId], references: [id])
+  marketplace Marketplace? @relation(fields: [marketplaceId], references: [id])
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("discounts")
+}

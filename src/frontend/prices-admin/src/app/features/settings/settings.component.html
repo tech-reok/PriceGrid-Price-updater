@@ -1,0 +1,89 @@
+<div class="space-y-6">
+  <div>
+    <h1 class="text-2xl font-bold text-forest">Configuración</h1>
+    <p class="text-sm text-olive mt-1">Catálogos del sistema y contexto de la sesión actual.</p>
+  </div>
+
+  <!-- Session context -->
+  <div class="pg-card p-5">
+    <h2 class="text-sm font-semibold text-forest mb-3">Sesión actual</h2>
+    <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-olive">Usuario</dt>
+        <dd class="font-medium text-forest mt-0.5">{{ session.user()?.name ?? '—' }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-olive">Rol</dt>
+        <dd class="font-medium text-forest mt-0.5">{{ session.user()?.roleSlug ?? '—' }}</dd>
+      </div>
+      <div>
+        <dt class="text-xs uppercase tracking-wide text-olive">Permisos</dt>
+        <dd class="font-medium text-forest mt-0.5">{{ session.permissions().length }}</dd>
+      </div>
+    </dl>
+  </div>
+
+  <!-- Currencies (read-only in phase 1) -->
+  <div class="pg-card overflow-hidden">
+    <div class="p-5 border-b border-line flex items-start gap-3">
+      <div class="p-2 bg-sidebar rounded-lg text-forest border border-line">
+        <lucide-icon name="lock" class="w-4 h-4"></lucide-icon>
+      </div>
+      <div>
+        <h2 class="text-lg font-semibold text-forest">Monedas</h2>
+        <p class="text-sm text-olive mt-0.5">
+          En la fase 1 el catálogo de monedas es de sólo lectura. Se usa para validar el código ISO y
+          redondear los precios; no hay conversión automática.
+        </p>
+      </div>
+    </div>
+
+    @if (loading()) {
+      <app-state-panel state="loading" message="Cargando monedas…" />
+    } @else if (error()) {
+      <app-state-panel state="error" [message]="error()!" [showRetry]="false" />
+    } @else if (currencies().length === 0) {
+      <app-state-panel state="empty" title="Sin monedas" message="Ejecuta los seeds para cargar MXN y USD." />
+    } @else {
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-olive" data-testid="currencies-table">
+          <thead class="bg-sidebar/60 text-xs uppercase font-semibold text-forest">
+            <tr>
+              <th class="px-5 py-3">Código</th>
+              <th class="px-5 py-3">Nombre</th>
+              <th class="px-5 py-3">Símbolo</th>
+              <th class="px-5 py-3 text-right">Decimales</th>
+              <th class="px-5 py-3">Estado</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-line/60">
+            @for (currency of currencies(); track currency.code) {
+              <tr class="hover:bg-sidebar/30 transition-colors">
+                <td class="px-5 py-3 font-medium text-forest">{{ currency.code }}</td>
+                <td class="px-5 py-3">{{ currency.name }}</td>
+                <td class="px-5 py-3">{{ currency.symbol }}</td>
+                <td class="px-5 py-3 text-right">{{ currency.decimals }}</td>
+                <td class="px-5 py-3"><app-status-badge [value]="currency.status" /></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <!-- Phase note -->
+  <div class="pg-card p-5 flex items-start gap-3">
+    <div class="p-2 bg-active rounded-lg text-forest">
+      <lucide-icon name="info" class="w-4 h-4"></lucide-icon>
+    </div>
+    <div class="text-sm text-olive">
+      <p class="font-medium text-forest">Reglas de descuento vigentes</p>
+      <p class="mt-1">
+        Se aplica <strong>un único descuento</strong> por precio, con prioridad
+        producto → lista de precios → marketplace → precio base. La acumulación de descuentos
+        y la conversión de moneda están planificadas para fases futuras.
+      </p>
+    </div>
+  </div>
+</div>

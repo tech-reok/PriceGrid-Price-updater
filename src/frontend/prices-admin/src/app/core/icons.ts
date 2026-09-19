@@ -1,0 +1,61 @@
+import {
+  Bell,
+  Building2,
+  ChevronDown,
+  CircleHelp,
+  DollarSign,
+  History,
+  Info,
+  KeyRound,
+  LayoutDashboard,
+  Leaf,
+  Lock,
+  LogIn,
+  LogOut,
+  Menu,
+  Package,
+  Percent,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+  Store,
+  Tags,
+  TrendingUp,
+  TriangleAlert,
+  Users,
+  X
+} from 'lucide-angular';
+
+/**
+ * Icons registered once at bootstrap (see app.config.ts) so any standalone
+ * component can render them with `<lucide-icon name="…">`.
+ */
+export const APP_ICONS = {
+  Bell,
+  Building2,
+  ChevronDown,
+  CircleHelp,
+  DollarSign,
+  History,
+  Info,
+  KeyRound,
+  LayoutDashboard,
+  Leaf,
+  Lock,
+  LogIn,
+  LogOut,
+  Menu,
+  Package,
+  Percent,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+  Store,
+  Tags,
+  TrendingUp,
+  TriangleAlert,
+  Users,
+  X
+};
