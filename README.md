@@ -51,6 +51,8 @@ API keys and scopes are the foundation for it.
 
 ## Branding
 
+<img src="docs/assets/pricegrid-logo.svg" alt="PriceGrid logo" width="180" />
+
 PriceGrid uses a product-focused logo built around a price tag and internal grid nodes,
 matching the system's purpose: price administration and marketplace catalog propagation.
 The Angular implementation lives in
