@@ -1,58 +1,36 @@
 import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
+import { HttpClient } from '@angular/common/http';
 import { Title } from '@angular/platform-browser';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideTransloco } from '@jsverse/transloco';
-import es419 from '../../../../public/i18n/es-419.json';
-import { HttpTranslocoLoader, I18N_ASSET_PATH } from './transloco-loader';
+import { firstValueFrom } from 'rxjs';
+import { BundledTranslocoLoader } from './transloco-loader';
 import { LanguageService } from './language.service';
 import { DEFAULT_LOCALE, SUPPORTED_LOCALE_IDS } from './supported-locales';
-import { jwtInterceptor } from '../interceptors/jwt.interceptor';
+import es419 from './catalogs/es-419.json';
+import enUS from './catalogs/en-US.json';
 
 /**
- * Integration coverage for the wiring the in-memory testing loader cannot
- * exercise: the real HTTP loader running through the real interceptor chain.
+ * The catalogs are loaded by the bundler, not over HTTP.
  *
- * This is the exact path that could deadlock on a circular dependency
- * (`jwtInterceptor -> LanguageService -> TranslocoService -> HttpTranslocoLoader
- * -> HttpClient -> jwtInterceptor`), because `LanguageService` starts the
- * catalog request from `initialize()`/`activate()`.
+ * These tests pin the two properties that motivated that choice:
+ *
+ *  1. each locale resolves to its own catalog, so a deployment cannot serve a
+ *     stale catalog from a browser or CDN cache (the chunk name carries the
+ *     content hash);
+ *  2. the loader has NO HTTP dependency, which removes the catalogs from the
+ *     interceptor chain and the injector re-entrancy risk that came with it.
  */
-describe('Transloco HTTP loading (real loader + interceptors)', () => {
-  let httpMock: HttpTestingController;
-  let language: LanguageService;
+describe('BundledTranslocoLoader', () => {
   let document: Document;
-
-  /**
-   * Pins the browser preference so the resolved locale is deterministic: without
-   * it the guest resolution would depend on the locale of the host running the
-   * tests.
-   */
-  function stubBrowserLocale(): void {
-    Object.defineProperty(window.navigator, 'languages', {
-      value: [DEFAULT_LOCALE],
-      configurable: true
-    });
-    Object.defineProperty(window.navigator, 'language', {
-      value: DEFAULT_LOCALE,
-      configurable: true
-    });
-  }
-
-  function restoreBrowserLocale(): void {
-    delete (window.navigator as unknown as Record<string, unknown>)['languages'];
-    delete (window.navigator as unknown as Record<string, unknown>)['language'];
-  }
 
   function build(): void {
     window.localStorage.clear();
-    stubBrowserLocale();
 
     TestBed.configureTestingModule({
+      // No `provideHttpClient()` and no interceptors on purpose: if the loader
+      // needed HTTP, these tests would fail at injection time.
       providers: [
-        provideHttpClient(withInterceptors([jwtInterceptor])),
-        provideHttpClientTesting(),
         ...provideTransloco({
           config: {
             availableLangs: [...SUPPORTED_LOCALE_IDS],
@@ -60,13 +38,11 @@ describe('Transloco HTTP loading (real loader + interceptors)', () => {
             fallbackLang: DEFAULT_LOCALE,
             reRenderOnLangChange: true
           },
-          loader: HttpTranslocoLoader
+          loader: BundledTranslocoLoader
         })
       ]
     });
 
-    httpMock = TestBed.inject(HttpTestingController);
-    language = TestBed.inject(LanguageService);
     document = TestBed.inject(DOCUMENT);
   }
 
@@ -80,53 +56,72 @@ describe('Transloco HTTP loading (real loader + interceptors)', () => {
   beforeEach(() => build());
 
   afterEach(() => {
-    restoreBrowserLocale();
     window.localStorage.clear();
     TestBed.resetTestingModule();
   });
 
-  it('bootstraps without a circular dependency and fetches only the active catalog', () => {
-    language.initialize();
+  it('resolves each locale to its own catalog', async () => {
+    const loader = TestBed.inject(BundledTranslocoLoader);
 
-    const request = httpMock.expectOne(`${I18N_ASSET_PATH}/${DEFAULT_LOCALE}.json`);
-    expect(request.request.method).toBe('GET');
-    // The interceptor resolved LanguageService while the catalog it is fetching
-    // was still in flight, which is the cycle this test guards against.
-    expect(request.request.headers.get('Accept-Language')).toBe(DEFAULT_LOCALE);
+    const spanish = await firstValueFrom(loader.getTranslation('es-419'));
+    const english = await firstValueFrom(loader.getTranslation('en-US'));
 
-    // Only the active locale is requested: catalogs are not preloaded.
-    httpMock.expectNone(`${I18N_ASSET_PATH}/en-US.json`);
-
-    request.flush(es419);
-    httpMock.verify();
+    // Compared against the imported catalogs, so this cannot drift.
+    expect(spanish).toEqual(es419);
+    expect(english).toEqual(enUS);
+    expect(spanish).not.toEqual(english);
   });
 
-  it('applies language, direction and the document title from the fetched catalog', async () => {
-    language.initialize();
-    httpMock.expectOne(`${I18N_ASSET_PATH}/${DEFAULT_LOCALE}.json`).flush(es419);
+  it('does not depend on HttpClient', () => {
+    // The loader works...
+    expect(TestBed.inject(BundledTranslocoLoader)).toBeTruthy();
 
+    // ...and HttpClient is not even available in this injector, which is what
+    // keeps the catalogs out of the interceptor chain.
+    expect(() => TestBed.inject(HttpClient)).toThrow();
+  });
+
+  it('applies language, direction and the document title from the bundled catalog', async () => {
+    const language = TestBed.inject(LanguageService);
     const title = TestBed.inject(Title);
+
+    language.initialize();
     await waitFor(() => title.getTitle() === es419.app.title);
 
+    expect(language.activeLocale()).toBe(DEFAULT_LOCALE);
     expect(title.getTitle()).toBe(es419.app.title);
     expect(document.documentElement.lang).toBe(DEFAULT_LOCALE);
     expect(document.documentElement.dir).toBe('ltr');
-    httpMock.verify();
   });
 
-  it('never renders a raw catalog key when the request fails', async () => {
+  it('switches catalogs at runtime without a reload', async () => {
+    const language = TestBed.inject(LanguageService);
     const title = TestBed.inject(Title);
-    const before = title.getTitle();
 
     language.initialize();
-    httpMock
-      .expectOne(`${I18N_ASSET_PATH}/${DEFAULT_LOCALE}.json`)
-      .flush('nope', { status: 404, statusText: 'Not Found' });
+    await waitFor(() => title.getTitle() === es419.app.title);
 
-    await waitFor(() => false, 5);
+    language.setLocale('en-US');
+    await waitFor(() => title.getTitle() === enUS.app.title);
 
-    // The fallback title declared in index.html is preserved.
-    expect(title.getTitle()).toBe(before);
-    expect(title.getTitle()).not.toContain('app.title');
+    expect(title.getTitle()).toBe(enUS.app.title);
+    expect(document.documentElement.lang).toBe('en-US');
+  });
+
+  it('degrades to the fallback catalog for a locale with no bundled file', async () => {
+    const language = TestBed.inject(LanguageService);
+    const title = TestBed.inject(Title);
+
+    language.initialize();
+    await waitFor(() => title.getTitle() === es419.app.title);
+
+    // `setLocale` rejects unsupported codes, so drive the loader straight to the
+    // failure path: Transloco must fall back rather than leave the UI blank.
+    const loader = TestBed.inject(BundledTranslocoLoader);
+    await expectAsync(firstValueFrom(loader.getTranslation('fr-FR'))).toBeRejected();
+
+    // The app is still usable and the title is still localized.
+    await waitFor(() => title.getTitle() === es419.app.title);
+    expect(title.getTitle()).toBe(es419.app.title);
   });
 });

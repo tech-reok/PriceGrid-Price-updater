@@ -6,10 +6,7 @@
     "outDir": "./out-tsc/spec",
     "types": [
       "jasmine"
-    ],
-    /* The catalog parity spec imports the real public/i18n/*.json files so the
-       check is deterministic and performs no HTTP request. */
-    "resolveJsonModule": true
+    ]
   },
   "include": [
     "src/**/*.spec.ts",

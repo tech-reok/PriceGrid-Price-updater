@@ -1,17 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslocoService, TranslocoTestingModule } from '@jsverse/transloco';
-import es419 from '../../../public/i18n/es-419.json';
-import enUS from '../../../public/i18n/en-US.json';
+import es419 from '../core/i18n/catalogs/es-419.json';
+import enUS from '../core/i18n/catalogs/en-US.json';
 import { DEFAULT_LOCALE, SUPPORTED_LOCALE_IDS } from '../core/i18n/supported-locales';
 import type { AuthUser } from '../core/models';
 
 /**
  * In-memory catalogs for unit tests.
  *
- * They are the REAL `public/i18n/*.json` files, imported directly, so a spec can
- * never assert copy the application does not ship and no fixture can drift from
- * the catalogs. The loader is Transloco's in-memory one, so unit tests never
- * perform a real asset request.
+ * They are the REAL catalog files under `core/i18n/catalogs/`, imported
+ * directly, so a spec can never assert copy the application does not ship and no
+ * fixture can drift from the catalogs. The loader is Transloco's in-memory one,
+ * so unit tests never perform a real asset request.
  */
 export const TEST_LANGS: Record<string, Record<string, unknown>> = {
   'es-419': es419 as Record<string, unknown>,

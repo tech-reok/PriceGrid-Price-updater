@@ -12,6 +12,8 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "esModuleInterop": true,
+    /* The i18n catalogs are imported as JSON modules (see core/i18n). */
+    "resolveJsonModule": true,
     "experimentalDecorators": true,
     "moduleResolution": "bundler",
     "importHelpers": true,

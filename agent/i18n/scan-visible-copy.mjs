@@ -219,7 +219,7 @@ for (const violation of violations) {
 }
 
 if (VERBOSE) {
-  console.log('\nMove the copy into public/i18n/*.json and reference it with { key } / | transloco.');
+  console.log('\nMove the copy into src/app/core/i18n/catalogs/*.json and reference it with { key } / | transloco.');
 }
 
 process.exit(1);

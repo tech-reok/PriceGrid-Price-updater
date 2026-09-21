@@ -286,7 +286,8 @@ Latin American Spanish (`es-419`, the default) and US English (`en-US`).
 
 | Piece | Where |
 |---|---|
-| Catalogs | `src/frontend/prices-admin/public/i18n/<locale>.json` |
+| Catalogs | `src/frontend/prices-admin/src/app/core/i18n/catalogs/<locale>.json` |
+| Loader (one hashed chunk per locale) | `core/i18n/transloco-loader.ts` |
 | Locale allowlist + metadata | `src/frontend/prices-admin/src/app/core/i18n/supported-locales.ts` |
 | Locale facade (precedence, DOM, title, cache) | `core/i18n/language.service.ts` |
 | Key resolution for TypeScript and templates | `core/i18n/display-text.service.ts`, `shared/display-text.pipe.ts` |
@@ -297,6 +298,36 @@ Latin American Spanish (`es-419`, the default) and US English (`en-US`).
 
 Resolution order: the authenticated user's stored preference → the locale cached
 in the browser for the login screen → `navigator.languages` → `es-419`.
+
+### How the catalogs are delivered (and why)
+
+The catalogs live under `src/` and are pulled in by a **dynamic `import()`** in the
+loader, not fetched over HTTP from `public/`. The builder therefore emits one
+lazily loaded chunk per locale, each with a **content hash** in its name:
+
+```text
+chunk-UMUVTYRA.js   ~21 KB   es-419
+chunk-HJ3N5BIB.js   ~20 KB   en-US
+```
+
+This matters for a containerised or CDN-fronted deployment:
+
+- The catalogs inherit the caching policy you already need for the JS bundles
+  (hashed assets are immutable), so **no extra cache rule is required anywhere**
+  — not in the image, not in the load balancer, not at the CDN edge.
+- A stale catalog is impossible. It was a real hazard when the catalogs were
+  static files served from `public/`: they do **not** get an `outputHashing` name
+  (`outputHashing` covers bundles and media, not copied assets), so a response
+  cached for a long time would pair an old catalog with new code, and Transloco
+  renders a missing key as the raw key (`common.actions` in the UI).
+- The loader has no `HttpClient` dependency, so catalog requests never travel
+  through the interceptors (no `Authorization`, no `Accept-Language`) and cannot
+  re-enter the injector while a locale is being applied.
+- Only the active locale is loaded, so the initial bundle is unchanged.
+
+Consequence: `public/` holds only `favicon.ico`, and the browser cache policy
+only has to distinguish `index.html` (revalidate) from everything else
+(hashed → immutable).
 
 ### Rules when adding UI copy
 
@@ -350,8 +381,10 @@ npm run build           # AOT type-checks every template binding
    `src/common/i18n/supported-locales.ts` (backend).
 2. Add the code to the frontend's `SUPPORTED_LOCALE_IDS` (the selector order is
    explicit, not derived from `Object.keys`).
-3. Create `public/i18n/<locale>.json` with **every** key. The parity test reports
-   omissions, and `npm run i18n:keys` fails until they are all present.
+3. Create `src/app/core/i18n/catalogs/<locale>.json` with **every** key. The
+   parity test reports omissions, and `npm run i18n:keys` fails until they are all
+   present. The loader already resolves `import('./catalogs/${lang}.json')` for
+   any locale, so no code change is needed to load it.
 4. Add any locale-specific browser normalisation you need in
    `normalizeBrowserLocale` / `resolveBrowserLocale`.
 5. No database migration: `users.preferred_locale` is a `VARCHAR(16)` validated

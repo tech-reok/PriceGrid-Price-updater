@@ -1,5 +1,5 @@
-import es419 from '../../../../public/i18n/es-419.json';
-import enUS from '../../../../public/i18n/en-US.json';
+import es419 from './catalogs/es-419.json';
+import enUS from './catalogs/en-US.json';
 import { SUPPORTED_LOCALE_IDS, localeMetadata } from './supported-locales';
 
 type Catalog = Record<string, unknown>;

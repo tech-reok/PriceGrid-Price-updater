@@ -1,4 +1,5 @@
-// Deep-merges i18n fragments into public/i18n/<locale>.json.
+// Deep-merges i18n fragments into the catalogs under
+// src/frontend/prices-admin/src/app/core/i18n/catalogs/<locale>.json.
 //
 // Usage: node agent/i18n/merge.mjs <locale> <fragment.json> [more.json ...]
 //
@@ -16,7 +17,7 @@ if (!locale || fragmentPaths.length === 0) {
   process.exit(1);
 }
 
-const target = join('src', 'frontend', 'prices-admin', 'public', 'i18n', `${locale}.json`);
+const target = join('src', 'frontend', 'prices-admin', 'src', 'app', 'core', 'i18n', 'catalogs', `${locale}.json`);
 
 /*
  * Merges `source` into `base`. Existing leaf values are PRESERVED unless

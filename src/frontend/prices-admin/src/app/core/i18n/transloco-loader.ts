@@ -1,31 +1,29 @@
-import { HttpClient } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
+import { Injectable } from '@angular/core';
 import type { Translation, TranslocoLoader } from '@jsverse/transloco';
-import type { Observable } from 'rxjs';
-
-/** Folder inside `public/` that holds the catalogs, served from the app root. */
-export const I18N_ASSET_PATH = 'i18n';
+import { from, type Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 /**
- * Loads the catalogs from `public/i18n/<locale>.json`.
+ * Loads the catalogs through the bundler instead of over HTTP.
  *
- * The URL is intentionally relative: the browser resolves it against
- * `<base href>`, so the assets are found regardless of the active route (an
- * absolute-looking `/i18n/...` would break a sub-path deployment, and a
- * relative path resolved against the route would break nested routes).
+ * The `import()` is dynamic and its path is a template literal, so the builder
+ * emits one lazily loaded chunk per locale, each carrying a content hash. That is
+ * the entire point: the catalogs become content-addressed like every other
+ * bundle, so they can never go stale in a browser or CDN cache after a
+ * deployment — no matter how many caching layers sit in front of the app — and
+ * no extra cache rule is needed anywhere.
  *
- * Only the active locale is fetched, so adding catalogs does not grow the
- * initial bundle.
+ * Because there is no HTTP request, the catalogs also stay out of the interceptor
+ * chain: no `Authorization`, no `Accept-Language`, and no dependency on
+ * `HttpClient` that could re-enter the injector while a locale is being applied.
  *
- * NOTE: the catalogs are application content with a **stable** file name, so the
- * origin must revalidate them (`Cache-Control: no-cache`) instead of caching them
- * for a long time. See the i18n section of the README.
+ * Only the active locale is imported, so this does not grow the initial bundle.
  */
 @Injectable({ providedIn: 'root' })
-export class HttpTranslocoLoader implements TranslocoLoader {
-  private readonly http = inject(HttpClient);
-
+export class BundledTranslocoLoader implements TranslocoLoader {
   getTranslation(lang: string): Observable<Translation> {
-    return this.http.get<Translation>(`${I18N_ASSET_PATH}/${lang}.json`);
+    return from(import(`./catalogs/${lang}.json`)).pipe(
+      map((module) => (module as { default: Translation }).default)
+    );
   }
 }

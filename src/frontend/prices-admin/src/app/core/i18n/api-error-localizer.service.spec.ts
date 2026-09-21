@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { installTestTranslations, provideTranslocoTesting } from '../../testing';
 import { ApiErrorLocalizerService } from './api-error-localizer.service';
 import { LanguageService } from './language.service';
-import enUS from '../../../../public/i18n/en-US.json';
+import enUS from './catalogs/en-US.json';
 
 // Expected values come from the shipped catalog, so these assertions cannot drift.
 const ERRORS = (enUS as { errors: Record<string, string> }).errors;

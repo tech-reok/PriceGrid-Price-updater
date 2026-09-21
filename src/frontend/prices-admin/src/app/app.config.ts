@@ -14,7 +14,7 @@ import { routes } from './app.routes';
 import { APP_ICONS } from './core/icons';
 import { jwtInterceptor } from './core/interceptors/jwt.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
-import { HttpTranslocoLoader } from './core/i18n/transloco-loader';
+import { BundledTranslocoLoader } from './core/i18n/transloco-loader';
 import { DEFAULT_LOCALE, SUPPORTED_LOCALE_IDS } from './core/i18n/supported-locales';
 
 export const appConfig: ApplicationConfig = {
@@ -43,7 +43,7 @@ export const appConfig: ApplicationConfig = {
           allowEmpty: false
         }
       },
-      loader: HttpTranslocoLoader
+      loader: BundledTranslocoLoader
     }),
     // jwtInterceptor attaches the token and Accept-Language; errorInterceptor
     // performs the single-flight refresh on 401 and logs out when that fails.

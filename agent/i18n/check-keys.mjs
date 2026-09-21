@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const APP = join(REPO_ROOT, 'src', 'frontend', 'prices-admin', 'src', 'app');
-const I18N = join(REPO_ROOT, 'src', 'frontend', 'prices-admin', 'public', 'i18n');
+const I18N = join(REPO_ROOT, 'src', 'frontend', 'prices-admin', 'src', 'app', 'core', 'i18n', 'catalogs');
 
 const SKIP = [/\.spec\.ts$/, /[\\/]testing[\\/]/];
 
