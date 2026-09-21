@@ -8,7 +8,10 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test --watch=false --browsers=ChromeHeadlessCI",
     "test:watch": "ng test --browsers=ChromeHeadlessCI",
-    "test:coverage": "ng test --watch=false --browsers=ChromeHeadlessCI --code-coverage"
+    "test:coverage": "ng test --watch=false --browsers=ChromeHeadlessCI --code-coverage",
+    "i18n:scan": "node ../../../agent/i18n/scan-visible-copy.mjs",
+    "i18n:keys": "node ../../../agent/i18n/check-keys.mjs",
+    "i18n:check": "npm run i18n:scan && npm run i18n:keys"
   },
   "private": true,
   "dependencies": {
@@ -21,6 +24,7 @@
     "@angular/platform-browser": "^19.2.0",
     "@angular/platform-browser-dynamic": "^19.2.0",
     "@angular/router": "^19.2.0",
+    "@jsverse/transloco": "^8.4.0",
     "@spartan-ng/brain": "^0.0.1-alpha.400",
     "@swimlane/ngx-charts": "^23.1.0",
     "autoprefixer": "^10.6.1",

@@ -1,26 +1,34 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { CrudPageComponent } from '../../shared/crud-page.component';
 import { RoleService, UserService } from '../../core/services/access.services';
 import { PriceListService } from '../../core/services/catalog.services';
 import { SessionStore } from '../../core/services/session.store';
 import { ToastService } from '../../core/services/toast.service';
 import { ModalComponent } from '../../shared/modal.component';
-import { idOptionLoader, staticOptions } from '../../core/utils/options';
-import type { ColumnConfig, FieldConfig, PayloadMapper, RowAction } from '../../shared/crud-page.types';
+import { idOptionLoader, recordStatusOptions } from '../../core/utils/options';
+import { DisplayTextService } from '../../core/i18n/display-text.service';
+import { ApiErrorLocalizerService } from '../../core/i18n/api-error-localizer.service';
+import {
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALE_IDS,
+  localeMetadata
+} from '../../core/i18n/supported-locales';
+import type { ColumnConfig, FieldConfig, FieldOption, PayloadMapper, RowAction } from '../../shared/crud-page.types';
 import type { PriceList, User } from '../../core/models';
 
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, CrudPageComponent, ModalComponent],
+  imports: [CommonModule, TranslocoPipe, CrudPageComponent, ModalComponent],
   template: `
     <app-crud-page
-      title="Usuarios"
-      subtitle="Accesos a la plataforma y rol asignado."
-      entityLabel="usuario"
-      searchPlaceholder="Buscar por nombre o correo…"
-      emptyMessage="Invita a tu equipo creando el primer usuario."
+      [title]="{ key: 'users.title' }"
+      [subtitle]="{ key: 'users.subtitle' }"
+      [entityLabel]="{ key: 'users.entity' }"
+      [searchPlaceholder]="{ key: 'users.searchPlaceholder' }"
+      [emptyMessage]="{ key: 'users.emptyMessage' }"
       [columns]="columns"
       [fields]="fields"
       [service]="service"
@@ -32,24 +40,31 @@ import type { PriceList, User } from '../../core/models';
     />
     <app-modal
       [open]="accessOpen()"
-      title="Listas de precios autorizadas"
-      subtitle="El usuario sólo podrá consultar las listas seleccionadas."
+      [title]="'users.access.title' | transloco"
+      [subtitle]="'users.access.subtitle' | transloco"
       (closed)="closeAccess()"
     >
       @if (accessOpen()) {
         <div class="space-y-4">
-          <p class="text-sm text-olive">Usuario: <span class="font-medium text-forest">{{ selectedUser()?.name }}</span></p>
+          <p class="text-sm text-olive">
+            {{ 'users.access.user' | transloco }}:
+            <span class="font-medium text-forest">{{ selectedUser()?.name }}</span>
+          </p>
           <div class="max-h-72 space-y-2 overflow-y-auto rounded-md border border-line p-3">
             @for (list of availablePriceLists(); track list.id) {
               <label class="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-forest hover:bg-sidebar">
                 <input type="checkbox" [checked]="selectedAccessIds().has(list.id)" (change)="toggleAccess(list.id)" />
                 <span>{{ list.name }}</span>
               </label>
-            } @empty { <p class="text-sm text-olive">No hay listas activas disponibles.</p> }
+            } @empty { <p class="text-sm text-olive">{{ 'users.access.empty' | transloco }}</p> }
           </div>
           <div class="flex justify-end gap-2">
-            <button type="button" class="rounded-md border border-line px-4 py-2 text-sm text-forest" (click)="closeAccess()">Cancelar</button>
-            <button type="button" class="rounded-md bg-forest px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" [disabled]="accessSaving()" (click)="saveAccess()">{{ accessSaving() ? 'Guardando…' : 'Guardar acceso' }}</button>
+            <button type="button" class="rounded-md border border-line px-4 py-2 text-sm text-forest" (click)="closeAccess()">
+              {{ 'common.cancel' | transloco }}
+            </button>
+            <button type="button" class="rounded-md bg-forest px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" [disabled]="accessSaving()" (click)="saveAccess()">
+              {{ accessSaving() ? ('common.saving' | transloco) : ('users.access.save' | transloco) }}
+            </button>
           </div>
         </div>
       }
@@ -62,38 +77,72 @@ export class UsersComponent {
   private readonly priceListService = inject(PriceListService);
   private readonly session = inject(SessionStore);
   private readonly toast = inject(ToastService);
+  private readonly text = inject(DisplayTextService);
+  private readonly errorLocalizer = inject(ApiErrorLocalizerService);
 
   readonly columns: ColumnConfig[] = [
-    { key: 'name', label: 'Nombre', sortable: true },
-    { key: 'email', label: 'Correo' },
-    { key: 'role.name', label: 'Rol' },
-    { key: 'lastLoginAt', label: 'Último acceso', type: 'date' },
-    { key: 'status', label: 'Estado', type: 'status' }
+    { key: 'name', label: { key: 'common.name' }, sortable: true },
+    { key: 'email', label: { key: 'users.columns.email' } },
+    { key: 'role.name', label: { key: 'users.columns.role' } },
+    { key: 'lastLoginAt', label: { key: 'users.columns.lastLogin' }, type: 'date' },
+    { key: 'status', label: { key: 'common.status' }, type: 'status' }
   ];
 
+  /**
+   * Language options for the administrative selector.
+   *
+   * Labels are catalog keys resolved while rendering, so the list follows a
+   * runtime language switch instead of freezing the language that was active
+   * when this component was constructed.
+   */
+  readonly preferredLocaleOptions: FieldOption[] = SUPPORTED_LOCALE_IDS.map((locale) => ({
+    value: locale,
+    label: { key: localeMetadata(locale).fullLabelKey }
+  }));
+
   readonly fields: FieldConfig[] = [
-    { key: 'name', label: 'Nombre', type: 'text', required: true },
-    { key: 'email', label: 'Correo electrónico', type: 'text', required: true, placeholder: 'usuario@empresa.com' },
+    { key: 'name', label: { key: 'common.name' }, type: 'text', required: true },
+    {
+      key: 'email',
+      label: { key: 'users.fields.email' },
+      type: 'text',
+      required: true,
+      placeholder: { key: 'users.fields.emailPlaceholder' }
+    },
     {
       key: 'password',
-      label: 'Contraseña',
+      label: { key: 'users.fields.password' },
       type: 'password',
       required: true,
       createOnly: true,
-      help: 'Mínimo 8 caracteres. En edición usa el campo para restablecerla.'
+      help: { key: 'users.fields.passwordHelp' }
     },
-    { key: 'password', label: 'Nueva contraseña', type: 'password', editOnly: true, help: 'Déjalo vacío para conservarla.' },
-    { key: 'roleId', label: 'Rol', type: 'select', required: true, optionsKey: 'roles' },
+    {
+      key: 'password',
+      label: { key: 'users.fields.newPassword' },
+      type: 'password',
+      editOnly: true,
+      help: { key: 'users.fields.newPasswordHelp' }
+    },
+    { key: 'roleId', label: { key: 'users.columns.role' }, type: 'select', required: true, optionsKey: 'roles' },
     {
       key: 'status',
-      label: 'Estado',
+      label: { key: 'common.status' },
       type: 'select',
       required: true,
       defaultValue: 'active',
-      options: staticOptions([
-        ['active', 'Activo'],
-        ['inactive', 'Inactivo']
-      ])
+      options: recordStatusOptions()
+    },
+    {
+      // Per-user UI language. It belongs to the user, never to the tenant, so it
+      // lives here and not in the tenant-scoped Settings screen.
+      key: 'preferredLocale',
+      label: { key: 'users.preferredLocale.label' },
+      type: 'select',
+      required: true,
+      defaultValue: DEFAULT_LOCALE,
+      help: { key: 'users.preferredLocale.help' },
+      options: this.preferredLocaleOptions
     }
   ];
 
@@ -109,7 +158,7 @@ export class UsersComponent {
 
   readonly rowActions: RowAction[] = [
     {
-      label: 'Listas autorizadas',
+      label: { key: 'users.rowActions.priceLists' },
       visible: () => this.can('price-list-access:manage'),
       run: (row) => this.openAccess(row)
     }
@@ -139,7 +188,7 @@ export class UsersComponent {
     });
     this.service.priceListAccess(user.id).subscribe({
       next: (access) => this.selectedAccessIds.set(new Set(access.priceListIds)),
-      error: (error) => this.toast.error(error?.error?.message ?? 'No se pudo cargar el acceso')
+      error: (error) => this.toast.error(this.errorLocalizer.message(error, { fallbackKey: 'users.errors.loadAccess' }))
     });
   }
 
@@ -154,8 +203,15 @@ export class UsersComponent {
     if (!user) return;
     this.accessSaving.set(true);
     this.service.assignPriceLists(user.id, [...this.selectedAccessIds()]).subscribe({
-      next: () => { this.accessSaving.set(false); this.accessOpen.set(false); this.toast.success('Acceso actualizado'); },
-      error: (error) => { this.accessSaving.set(false); this.toast.error(error?.error?.message ?? 'No se pudo guardar el acceso'); }
+      next: () => {
+        this.accessSaving.set(false);
+        this.accessOpen.set(false);
+        this.toast.success(this.text.translate('users.toasts.accessUpdated'));
+      },
+      error: (error) => {
+        this.accessSaving.set(false);
+        this.toast.error(this.errorLocalizer.message(error, { fallbackKey: 'users.errors.saveAccess' }));
+      }
     });
   }
 

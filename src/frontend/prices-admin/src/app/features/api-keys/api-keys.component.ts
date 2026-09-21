@@ -4,7 +4,9 @@ import { ApiKeyService } from '../../core/services/access.services';
 import { SessionStore } from '../../core/services/session.store';
 import { ToastService } from '../../core/services/toast.service';
 import { staticOptions } from '../../core/utils/options';
-import { extractApiErrorMessage, toDateInputValue } from '../../core/utils/format';
+import { toDateInputValue } from '../../core/utils/format';
+import { DisplayTextService } from '../../core/i18n/display-text.service';
+import { ApiErrorLocalizerService } from '../../core/i18n/api-error-localizer.service';
 import type { ColumnConfig, FieldConfig, RowAction } from '../../shared/crud-page.types';
 
 /** Read-only integration keys for the external API (phase 1). */
@@ -14,11 +16,11 @@ import type { ColumnConfig, FieldConfig, RowAction } from '../../shared/crud-pag
   imports: [CrudPageComponent],
   template: `
     <app-crud-page
-      title="API Keys"
-      subtitle="Llaves de sólo lectura para la API externa. La llave completa se muestra una única vez."
-      entityLabel="API key"
-      searchPlaceholder="Buscar por nombre o prefijo…"
-      emptyMessage="Genera una llave para que tus integraciones consulten precios."
+      [title]="{ key: 'apiKeys.title' }"
+      [subtitle]="{ key: 'apiKeys.subtitle' }"
+      [entityLabel]="{ key: 'apiKeys.entity' }"
+      [searchPlaceholder]="{ key: 'apiKeys.searchPlaceholder' }"
+      [emptyMessage]="{ key: 'apiKeys.emptyMessage' }"
       [columns]="columns"
       [fields]="fields"
       [service]="service"
@@ -36,34 +38,49 @@ export class ApiKeysComponent {
   readonly service = inject(ApiKeyService);
   private readonly session = inject(SessionStore);
   private readonly toast = inject(ToastService);
+  private readonly text = inject(DisplayTextService);
+  private readonly errorLocalizer = inject(ApiErrorLocalizerService);
   private readonly crudPage = viewChild(CrudPageComponent);
 
   readonly columns: ColumnConfig[] = [
-    { key: 'name', label: 'Nombre', sortable: true },
-    { key: 'prefix', label: 'Prefijo' },
-    { key: 'scopes', label: 'Scopes' },
-    { key: 'effectiveStatus', label: 'Estado', type: 'status' },
-    { key: 'expiresAt', label: 'Expira', type: 'date' },
-    { key: 'lastUsedAt', label: 'Último uso', type: 'date' }
+    { key: 'name', label: { key: 'common.name' }, sortable: true },
+    { key: 'prefix', label: { key: 'apiKeys.columns.prefix' } },
+    { key: 'scopes', label: { key: 'apiKeys.columns.scopes' } },
+    { key: 'effectiveStatus', label: { key: 'common.status' }, type: 'status' },
+    { key: 'expiresAt', label: { key: 'apiKeys.columns.expiresAt' }, type: 'date' },
+    { key: 'lastUsedAt', label: { key: 'apiKeys.columns.lastUsedAt' }, type: 'date' }
   ];
 
   readonly fields: FieldConfig[] = [
-    { key: 'name', label: 'Nombre', type: 'text', required: true, placeholder: 'Integración marketplace' },
+    {
+      key: 'name',
+      label: { key: 'common.name' },
+      type: 'text',
+      required: true,
+      placeholder: { key: 'apiKeys.fields.namePlaceholder' }
+    },
     {
       key: 'scope',
-      label: 'Scope (sólo lectura en fase 1)',
+      label: { key: 'apiKeys.fields.scope' },
       type: 'select',
       required: true,
       defaultValue: 'products:read',
       full: true,
+      // The scope slug is the API contract and never changes; only the
+      // description next to it is translated.
       options: staticOptions([
-        ['products:read', 'products:read — Productos (lectura)'],
-        ['prices:read', 'prices:read — Precios (lectura)'],
-        ['price-lists:read', 'price-lists:read — Listas de precios (lectura)'],
-        ['marketplaces:read', 'marketplaces:read — Marketplaces (lectura)']
+        ['products:read', { key: 'apiKeys.scopes.productsRead' }],
+        ['prices:read', { key: 'apiKeys.scopes.pricesRead' }],
+        ['price-lists:read', { key: 'apiKeys.scopes.priceListsRead' }],
+        ['marketplaces:read', { key: 'apiKeys.scopes.marketplacesRead' }]
       ])
     },
-    { key: 'expiresAt', label: 'Expira el', type: 'date', help: 'Opcional: sin fecha la llave no expira.' }
+    {
+      key: 'expiresAt',
+      label: { key: 'apiKeys.fields.expiresAt' },
+      type: 'date',
+      help: { key: 'apiKeys.fields.expiresAtHelp' }
+    }
   ];
 
   readonly mapToForm = (row: Record<string, any>): Record<string, unknown> => ({
@@ -81,7 +98,7 @@ export class ApiKeysComponent {
   /** Revoking persists `revoked_at`; `expired` stays derived from `expires_at`. */
   readonly rowActions: RowAction[] = [
     {
-      label: 'Revocar',
+      label: { key: 'apiKeys.rowActions.revoke' },
       tone: 'danger',
       visible: (row) => row.effectiveStatus !== 'revoked',
       run: (row) => this.revoke(row)
@@ -91,10 +108,10 @@ export class ApiKeysComponent {
   private revoke(row: Record<string, any>): void {
     this.service.revoke(String(row['id'])).subscribe({
       next: () => {
-        this.toast.success('API key revocada');
+        this.toast.success(this.text.translate('apiKeys.toasts.revoked'));
         this.crudPage()?.refresh();
       },
-      error: (error: unknown) => this.toast.error(extractApiErrorMessage(error))
+      error: (error: unknown) => this.toast.error(this.errorLocalizer.message(error))
     });
   }
 

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { installTestTranslations, provideTranslocoTesting } from '../testing';
 import { importProvidersFrom } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
@@ -22,6 +23,8 @@ import { SettingsComponent } from './settings/settings.component';
 import { AuthService } from '../core/services/auth.service';
 import { DashboardService } from '../core/services/dashboard.service';
 import { SessionStore } from '../core/services/session.store';
+import { LanguageService } from '../core/i18n/language.service';
+import { DisplayTextService } from '../core/i18n/display-text.service';
 import { ToastService } from '../core/services/toast.service';
 import {
   CurrencyService,
@@ -46,6 +49,7 @@ function authUser(overrides: Partial<AuthUser> = {}): AuthUser {
     tenantId: 'tenant-1',
     isGlobalAdmin: false,
     permissions: ['products:read'],
+    preferredLocale: 'es-419',
     ...overrides
   };
 }
@@ -71,12 +75,14 @@ describe('LoginComponent', () => {
   let router: Router;
 
   beforeEach(async () => {
+  window.localStorage.clear();
     authService = { login: jasmine.createSpy('login') };
 
     await TestBed.configureTestingModule({
-      imports: [LoginComponent],
+      imports: [LoginComponent, provideTranslocoTesting()],
       providers: [provideRouter([]), iconProviders, { provide: AuthService, useValue: authService }]
     }).compileComponents();
+    installTestTranslations();
 
     fixture = TestBed.createComponent(LoginComponent);
     router = TestBed.inject(Router);
@@ -140,6 +146,7 @@ describe('DashboardComponent', () => {
   };
 
   beforeEach(async () => {
+  window.localStorage.clear();
     dashboardService = {
       summary: jasmine.createSpy('summary').and.returnValue(
         of({
@@ -173,7 +180,7 @@ describe('DashboardComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [DashboardComponent],
+      imports: [DashboardComponent, provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         provideNoopAnimations(),
@@ -181,6 +188,7 @@ describe('DashboardComponent', () => {
         { provide: DashboardService, useValue: dashboardService }
       ]
     }).compileComponents();
+    installTestTranslations();
 
     fixture = TestBed.createComponent(DashboardComponent);
     fixture.detectChanges();
@@ -224,9 +232,10 @@ describe('DashboardComponent', () => {
 describe('module pages', () => {
   async function build<T>(component: any, providers: any[]): Promise<ComponentFixture<T>> {
     await TestBed.configureTestingModule({
-      imports: [component],
+      imports: [component, provideTranslocoTesting()],
       providers: [provideRouter([]), iconProviders, ...providers]
     }).compileComponents();
+    installTestTranslations();
 
     const fixture = TestBed.createComponent<T>(component);
     fixture.detectChanges();
@@ -297,7 +306,10 @@ describe('module pages', () => {
     const page = fixture.debugElement.query(By.css('app-crud-page')).componentInstance;
 
     expect(fixture.nativeElement.textContent).toContain('API Keys');
-    expect(page.visibleRowActions({ effectiveStatus: 'active' }).map((a: any) => a.label)).toEqual(['Revocar']);
+    // Row action labels are catalog keys resolved while rendering.
+    expect(page.visibleRowActions({ effectiveStatus: 'active' }).map((a: any) => a.label)).toEqual([
+      { key: 'apiKeys.rowActions.revoke' }
+    ]);
     expect(page.visibleRowActions({ effectiveStatus: 'revoked' })).toEqual([]);
   });
 
@@ -317,7 +329,9 @@ describe('module pages', () => {
     const page = fixture.debugElement.query(By.css('app-crud-page')).componentInstance;
 
     expect(fixture.nativeElement.textContent).toContain('Roles');
-    expect(page.visibleRowActions({ id: 'r1' }).map((a: any) => a.label)).toEqual(['Permisos']);
+    expect(page.visibleRowActions({ id: 'r1' }).map((a: any) => a.label)).toEqual([
+      { key: 'roles.rowActions.permissions' }
+    ]);
 
     session.clear();
   });
@@ -329,7 +343,7 @@ describe('module pages', () => {
 
   it('renders the settings module with the read-only currency table', async () => {
     await TestBed.configureTestingModule({
-      imports: [SettingsComponent],
+      imports: [SettingsComponent, provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         iconProviders,
@@ -359,11 +373,132 @@ describe('module pages', () => {
         }
       ]
     }).compileComponents();
+    installTestTranslations();
 
     const fixture = TestBed.createComponent(SettingsComponent);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('[data-testid="currencies-table"]').textContent).toContain('MXN');
     expect(fixture.nativeElement.textContent).toContain('sólo lectura');
+  });
+
+  /**
+   * Representative coverage for the runtime switch, as required by the plan:
+   * every screen renders from the catalogs, so flipping the language must change
+   * both the rendered chrome and the declarative configuration labels, with no
+   * raw key left behind.
+   */
+  describe('runtime language switch', () => {
+    afterEach(() => TestBed.resetTestingModule());
+
+    /** Flips the locale, re-renders and asserts no raw key leaked. */
+    async function switchTo(locale: 'es-419' | 'en-US', fixture: ComponentFixture<any>): Promise<string> {
+      TestBed.inject(LanguageService).setLocale(locale);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const text = fixture.nativeElement.textContent as string;
+      // A missing catalog entry would render as `namespace.someKey`.
+      expect(text).not.toMatch(
+        /\b(common|crud|state|status|shell|users|roles|products|prices|settings|dashboard)\.[a-zA-Z]+\b/
+      );
+      return text;
+    }
+
+    /** Resolves a declarative `DisplayText` the way the templates do. */
+    function resolve(value: unknown): string {
+      return TestBed.inject(DisplayTextService).resolve(value as never);
+    }
+
+    it('switches the products module between locales', async () => {
+      const fixture = await build(ProductsComponent, catalogProviders());
+      const component = fixture.componentInstance as ProductsComponent;
+
+      expect(await switchTo('es-419', fixture)).toContain('Productos');
+      const english = await switchTo('en-US', fixture);
+      expect(english).toContain('Products');
+      expect(english).toContain('Refresh');
+
+      // Column and field labels are catalog keys resolved at render time.
+      expect(resolve(component.columns[2].label)).toBe('Base price');
+      expect(resolve(component.fields[4].label)).toBe('Status');
+
+      await switchTo('es-419', fixture);
+      expect(resolve(component.columns[2].label)).toBe('Precio base');
+      expect(resolve(component.fields[4].label)).toBe('Estado');
+    });
+
+    it('switches the users module, including the preferred-language field', async () => {
+      const fixture = await build(UsersComponent, catalogProviders());
+      const component = fixture.componentInstance as UsersComponent;
+
+      const localeField = component.fields.find((field) => field.key === 'preferredLocale')!;
+      expect(localeField).withContext('the Users screen must expose the language field').toBeDefined();
+
+      await switchTo('es-419', fixture);
+      expect(resolve(localeField.label)).toBe('Idioma preferido');
+
+      await switchTo('en-US', fixture);
+      expect(resolve(localeField.label)).toBe('Preferred language');
+    });
+
+    it('switches the roles module', async () => {
+      const fixture = await build(RolesComponent, catalogProviders());
+
+      expect(await switchTo('es-419', fixture)).toContain('Roles');
+      const english = await switchTo('en-US', fixture);
+      expect(english).toContain('Roles');
+      expect(english).toContain('System roles and the company');
+    });
+
+    it('switches the discount enums by code', async () => {
+      const fixture = await build(DiscountsComponent, catalogProviders());
+      const component = fixture.componentInstance as DiscountsComponent;
+
+      const typeColumn = component.columns.find((column) => column.key === 'type')!;
+
+      await switchTo('es-419', fixture);
+      expect(resolve(typeColumn.value!({ type: 'percentage' }))).toBe('Porcentaje');
+      expect(resolve(component.columns[3].value!({ appliesTo: 'price_list' }))).toBe('Lista de precios');
+
+      await switchTo('en-US', fixture);
+      expect(resolve(typeColumn.value!({ type: 'percentage' }))).toBe('Percentage');
+      expect(resolve(component.columns[3].value!({ appliesTo: 'price_list' }))).toBe('Price list');
+
+      // An unknown code stays visible instead of blanking the cell.
+      expect(resolve(typeColumn.value!({ type: 'brand_new' }))).toBe('brand_new');
+    });
+
+    it('translates the seeded system role name by slug', async () => {
+      const fixture = await build(RolesComponent, catalogProviders());
+      const page = fixture.debugElement.query(By.css('app-crud-page')).componentInstance;
+
+      const systemRole = { id: 'r1', slug: 'global_admin', name: 'Global administrator', isSystem: true };
+
+      expect(page.cellText(systemRole, page.columns()[0])).toBe('Administrador global');
+
+      TestBed.inject(LanguageService).setLocale('en-US');
+      expect(page.cellText(systemRole, page.columns()[0])).toBe('Global administrator');
+
+      // A custom role keeps its database copy in both languages.
+      const customRole = { id: 'r2', slug: 'analista', name: 'Analista de precios', isSystem: false };
+      expect(page.cellText(customRole, page.columns()[0])).toBe('Analista de precios');
+    });
+
+    it('switches the login screen', async () => {
+      const authService = { login: jasmine.createSpy('login') };
+      await TestBed.configureTestingModule({
+        imports: [LoginComponent, provideTranslocoTesting()],
+        providers: [provideRouter([]), iconProviders, { provide: AuthService, useValue: authService }]
+      }).compileComponents();
+      installTestTranslations();
+
+      const fixture = TestBed.createComponent(LoginComponent);
+      fixture.detectChanges();
+
+      expect(await switchTo('es-419', fixture)).toContain('Ingresar');
+      expect(await switchTo('en-US', fixture)).toContain('Sign in');
+    });
   });
 });

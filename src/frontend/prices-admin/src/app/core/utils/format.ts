@@ -18,51 +18,13 @@ export function toDateOnlyInputValue(value: string | Date | null | undefined): s
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
 }
 
-/** Reads the human message from the API error envelope. */
-export function extractApiErrorMessage(error: unknown): string {
-  const payload = (error as { error?: unknown })?.error;
-  if (payload && typeof payload === 'object') {
-    const message = (payload as { message?: unknown }).message;
-    if (typeof message === 'string' && message !== '') return message;
-  }
-  if (error instanceof Error && error.message) return error.message;
-  return 'Ocurrió un error inesperado';
-}
-
-/** Maps `details[].field` from the API envelope to a control-name map. */
-export function extractFieldErrors(error: unknown): Record<string, string> {
-  const details = (error as { error?: { details?: unknown } })?.error?.details;
-  const result: Record<string, string> = {};
-
-  if (Array.isArray(details)) {
-    for (const detail of details) {
-      const field = (detail as { field?: unknown })?.field;
-      const message = (detail as { message?: unknown })?.message;
-      if (typeof field === 'string' && typeof message === 'string') {
-        result[field] = message;
-      }
-    }
-  }
-
-  return result;
-}
-
-/** Formats a monetary amount; shared by pipes and imperative previews. */
-export function formatMoney(value: number | null | undefined, currency = 'MXN'): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return '—';
-  try {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: currency || 'MXN',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  } catch {
-    return `${value.toFixed(2)} ${currency}`;
-  }
-}
-
-/** Turns a snake_case / camelCase key into a readable label. */
+/**
+ * Turns a snake_case / camelCase key into a readable label.
+ *
+ * Used only for technical identifiers that have no catalog entry (permission
+ * slugs, enum codes). It is deliberately NOT a localization helper: user-visible
+ * copy belongs in the catalogs.
+ */
 export function humanize(value: string): string {
   return value
     .replace(/[_-]+/g, ' ')
@@ -81,3 +43,15 @@ export function readPath(source: unknown, path: string): unknown {
       return undefined;
     }, source);
 }
+
+/*
+ * Error localization and money formatting used to live here as `es-MX`-bound
+ * module functions. Both moved to injectable services so they can follow the
+ * active locale at runtime:
+ *
+ *   - error envelopes  -> `ApiErrorLocalizerService` (code -> localized copy)
+ *   - money/number/date -> `LocaleFormattingService`
+ *
+ * Nothing locale-dependent should come back to this module: it has no injector,
+ * so anything here would freeze a language at import time.
+ */

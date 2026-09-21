@@ -5,7 +5,9 @@ import {
   createTenantSchema,
   createUserSchema,
   loginSchema,
+  preferredLocaleSchema,
   updateApiKeySchema,
+  updatePreferencesSchema,
   updateRoleSchema,
   updateTenantSchema,
   updateUserSchema
@@ -23,6 +25,7 @@ import {
   updateProductSchema
 } from '../../src/validators/pricing.validators';
 import { idParamSchema, paginationQuerySchema } from '../../src/validators/common.validators';
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from '../../src/common/i18n/supported-locales';
 
 describe('common validators', () => {
   it('validates uuids', () => {
@@ -112,6 +115,82 @@ describe('user validators', () => {
 
     expect(createUserSchema.safeParse({ ...valid, tenantId: uuid }).success).toBe(false);
     expect(updateUserSchema.safeParse({ tenantId: uuid }).success).toBe(false);
+  });
+});
+
+describe('preferred locale validators', () => {
+  const uuid = '3f1d9d3a-1c1e-4b1e-9a5e-1b2c3d4e5f60';
+  const validUser = {
+    name: 'User',
+    email: 'user@example.com',
+    password: 'Password!123',
+    roleId: uuid
+  };
+
+  it('accepts exactly the two canonical locales and nothing else', () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      expect(preferredLocaleSchema.safeParse(locale).success).toBe(true);
+    }
+    // The allowlist is deliberately narrow; adding a language must be a code change.
+    expect([...SUPPORTED_LOCALES]).toEqual(['es-419', 'en-US']);
+  });
+
+  it('rejects language-only, regional, wrongly cased and unsupported values', () => {
+    for (const rejected of ['es', 'en', 'es-MX', 'en-GB', 'ES-419', 'en-us', 'pt-BR', '']) {
+      expect(preferredLocaleSchema.safeParse(rejected).success).toBe(false);
+    }
+  });
+
+  it('rejects non-string, null and missing values', () => {
+    for (const rejected of [null, undefined, 42, {}, []]) {
+      expect(preferredLocaleSchema.safeParse(rejected).success).toBe(false);
+    }
+  });
+
+  it('accepts the documented self-service body', () => {
+    expect(updatePreferencesSchema.parse({ preferredLocale: 'en-US' })).toEqual({
+      preferredLocale: 'en-US'
+    });
+  });
+
+  it('rejects an unsupported locale and an empty body for the self-service endpoint', () => {
+    expect(updatePreferencesSchema.safeParse({ preferredLocale: 'es' }).success).toBe(false);
+    expect(updatePreferencesSchema.safeParse({ preferredLocale: 'en' }).success).toBe(false);
+    expect(updatePreferencesSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('rejects extra fields, so a client cannot target another user', () => {
+    expect(
+      updatePreferencesSchema.safeParse({ preferredLocale: 'en-US', userId: uuid }).success
+    ).toBe(false);
+    expect(
+      updatePreferencesSchema.safeParse({ preferredLocale: 'en-US', id: uuid }).success
+    ).toBe(false);
+    expect(
+      updatePreferencesSchema.safeParse({ preferredLocale: 'en-US', tenantId: uuid }).success
+    ).toBe(false);
+  });
+
+  it('defaults create to es-419 when the locale is omitted', () => {
+    expect(createUserSchema.parse(validUser).preferredLocale).toBe(DEFAULT_LOCALE);
+    expect(DEFAULT_LOCALE).toBe('es-419');
+  });
+
+  it('accepts both supported locales on administrative create', () => {
+    expect(createUserSchema.parse({ ...validUser, preferredLocale: 'en-US' }).preferredLocale).toBe('en-US');
+    expect(createUserSchema.parse({ ...validUser, preferredLocale: 'es-419' }).preferredLocale).toBe('es-419');
+  });
+
+  it('rejects an unsupported locale on administrative create', () => {
+    expect(createUserSchema.safeParse({ ...validUser, preferredLocale: 'es-MX' }).success).toBe(false);
+    expect(createUserSchema.safeParse({ ...validUser, preferredLocale: 'fr-FR' }).success).toBe(false);
+  });
+
+  it('keeps the locale optional on administrative update', () => {
+    expect(updateUserSchema.safeParse({ name: 'N' }).success).toBe(true);
+    expect(updateUserSchema.parse({ preferredLocale: 'en-US' }).preferredLocale).toBe('en-US');
+    expect(updateUserSchema.safeParse({ preferredLocale: 'es-MX' }).success).toBe(false);
+    expect(updateUserSchema.safeParse({ preferredLocale: null }).success).toBe(false);
   });
 });
 

@@ -2,7 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CrudPageComponent } from '../../shared/crud-page.component';
 import { MarketplaceService } from '../../core/services/catalog.services';
 import { SessionStore } from '../../core/services/session.store';
-import { staticOptions } from '../../core/utils/options';
+import { marketplaceCodeOptions, recordStatusOptions } from '../../core/utils/options';
 import type { ColumnConfig, FieldConfig } from '../../shared/crud-page.types';
 
 @Component({
@@ -11,11 +11,11 @@ import type { ColumnConfig, FieldConfig } from '../../shared/crud-page.types';
   imports: [CrudPageComponent],
   template: `
     <app-crud-page
-      title="Marketplaces"
-      subtitle="Canales de venta donde se publican los precios."
-      entityLabel="marketplace"
-      searchPlaceholder="Buscar por nombre o código…"
-      emptyMessage="Configura Amazon, Mercado Libre o tu tienda propia."
+      [title]="{ key: 'marketplaces.title' }"
+      [subtitle]="{ key: 'marketplaces.subtitle' }"
+      [entityLabel]="{ key: 'marketplaces.entity' }"
+      [searchPlaceholder]="{ key: 'marketplaces.searchPlaceholder' }"
+      [emptyMessage]="{ key: 'marketplaces.emptyMessage' }"
       [columns]="columns"
       [fields]="fields"
       [service]="service"
@@ -30,34 +30,33 @@ export class MarketplacesComponent {
   private readonly session = inject(SessionStore);
 
   readonly columns: ColumnConfig[] = [
-    { key: 'name', label: 'Nombre', sortable: true },
-    { key: 'code', label: 'Código' },
-    { key: 'status', label: 'Estado', type: 'status' }
+    { key: 'name', label: { key: 'common.name' }, sortable: true },
+    { key: 'code', label: { key: 'common.code' } },
+    { key: 'status', label: { key: 'common.status' }, type: 'status' }
   ];
 
   readonly fields: FieldConfig[] = [
-    { key: 'name', label: 'Nombre', type: 'text', required: true, placeholder: 'Amazon' },
+    {
+      key: 'name',
+      label: { key: 'common.name' },
+      type: 'text',
+      required: true,
+      placeholder: { key: 'marketplaces.fields.namePlaceholder' }
+    },
     {
       key: 'code',
-      label: 'Código',
+      label: { key: 'common.code' },
       type: 'select',
       required: true,
-      options: staticOptions([
-        ['amazon', 'Amazon'],
-        ['mercadolibre', 'Mercado Libre'],
-        ['own_store', 'Tienda propia']
-      ])
+      options: marketplaceCodeOptions()
     },
     {
       key: 'status',
-      label: 'Estado',
+      label: { key: 'common.status' },
       type: 'select',
       required: true,
       defaultValue: 'active',
-      options: staticOptions([
-        ['active', 'Activo'],
-        ['inactive', 'Inactivo']
-      ])
+      options: recordStatusOptions()
     }
   ];
 

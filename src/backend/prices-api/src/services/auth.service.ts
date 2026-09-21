@@ -2,13 +2,14 @@ import { inject, injectable } from 'tsyringe';
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env';
 import { TOKENS } from '../di/tokens';
-import { UnauthorizedError } from '../common/errors';
+import { UnauthorizedError, ValidationError } from '../common/errors';
 import { verifyPassword } from '../common/utils/password';
 import {
   generateRefreshToken,
   hashRefreshToken,
   refreshTokenExpiry
 } from '../common/utils/tokens';
+import { isSupportedLocale, normalizeStoredLocale, SUPPORTED_LOCALES } from '../common/i18n/supported-locales';
 import { logger } from '../common/logger';
 import type { IAuthRepository, UserWithRole } from '../repositories/auth.repository';
 import type { AuthUser } from '../types';
@@ -58,7 +59,9 @@ export class AuthService {
       roleSlug: user.role.slug,
       tenantId: user.tenantId,
       isGlobalAdmin: user.role.slug === GLOBAL_ADMIN_ROLE,
-      permissions
+      permissions,
+      // Legacy/hand-edited rows degrade to the default instead of failing the session.
+      preferredLocale: normalizeStoredLocale(user.preferredLocale)
     };
   }
 
@@ -146,6 +149,37 @@ export class AuthService {
       throw new UnauthorizedError('User is not active', 'USER_INACTIVE');
     }
     return this.toAuthUser(user);
+  }
+
+  /**
+   * Self-service UI language update. The user id comes from the verified access
+   * token, never from the request body, and no tenant context or RBAC
+   * permission is involved: every authenticated user owns this preference,
+   * including a global administrator with no selected company.
+   *
+   * Refresh tokens are intentionally left untouched.
+   */
+  async updatePreferences(userId: string, preferredLocale: unknown): Promise<AuthUser> {
+    // Defense in depth: the Zod schema already rejects anything outside the
+    // allowlist, but direct callers must not be able to bypass it.
+    if (!isSupportedLocale(preferredLocale)) {
+      throw new ValidationError('Unsupported locale', [
+        {
+          field: 'preferredLocale',
+          code: 'UNSUPPORTED_LOCALE',
+          message: `must be one of: ${SUPPORTED_LOCALES.join(', ')}`,
+          params: { allowed: [...SUPPORTED_LOCALES] }
+        }
+      ]);
+    }
+
+    const updated = await this.repository.updateUserPreferences({ userId, preferredLocale });
+    if (!updated || updated.status !== 'active') {
+      throw new UnauthorizedError('User is not active', 'USER_INACTIVE');
+    }
+
+    logger.info({ userId, preferredLocale }, 'auth_locale_updated');
+    return this.toAuthUser(updated);
   }
 
   /** Used by the JWT middleware to validate access tokens. */

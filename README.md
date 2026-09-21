@@ -20,6 +20,7 @@ API keys and scopes are the foundation for it.
 - [Database: migrations and seeds](#database-migrations-and-seeds)
 - [Initial development credentials](#initial-development-credentials)
 - [Frontend: install and run](#frontend-install-and-run)
+- [Internationalization (i18n)](#internationalization-i18n)
 - [Environment variables](#environment-variables)
 - [Business rules: pricing and discounts](#business-rules-pricing-and-discounts)
 - [Tenant time zones and business dates](#tenant-time-zones-and-business-dates)
@@ -29,6 +30,7 @@ API keys and scopes are the foundation for it.
 - [What is covered by the tests](#what-is-covered-by-the-tests)
 - [Suggested integration / E2E tests (future)](#suggested-integration--e2e-tests-future)
 - [Troubleshooting](#troubleshooting)
+- [Regenerating the Prisma client while the export worker is running](#regenerating-the-prisma-client-while-the-export-worker-is-running)
 - [Roadmap / out of scope for phase 1](#roadmap--out-of-scope-for-phase-1)
 
 ---
@@ -115,6 +117,13 @@ npm run seed
 # 6) Start the API
 npm run dev               # http://localhost:3000
 ```
+
+> **After pulling changes that include a new migration, run step 4 again** before
+> starting the API. A migration file in `prisma/migrations` does nothing on its
+> own: if it is not applied, the client (which is regenerated from the schema)
+> will query a column the database does not have yet, and login fails with a
+> `500 INTERNAL_ERROR` whose log ends in `The column … does not exist in the
+> current database`. `npx prisma migrate status` tells you what is pending.
 
 Verify the API is up:
 
@@ -268,6 +277,92 @@ The dev server proxies to the API at `http://localhost:3000` (configured through
 Angular environment file). Start the backend first so login works.
 
 ---
+
+## Internationalization (i18n)
+
+The UI is translated per **user** (never per tenant) with
+[Transloco](https://jsverse.gitbook.io/transloco). Two locales ship today:
+Latin American Spanish (`es-419`, the default) and US English (`en-US`).
+
+| Piece | Where |
+|---|---|
+| Catalogs | `src/frontend/prices-admin/public/i18n/<locale>.json` |
+| Locale allowlist + metadata | `src/frontend/prices-admin/src/app/core/i18n/supported-locales.ts` |
+| Locale facade (precedence, DOM, title, cache) | `core/i18n/language.service.ts` |
+| Key resolution for TypeScript and templates | `core/i18n/display-text.service.ts`, `shared/display-text.pipe.ts` |
+| Locale-aware date/money/number formatting | `core/i18n/locale-formatting.service.ts` |
+| API error → localized copy | `core/i18n/api-error-localizer.service.ts` |
+| Header selector | `shared/language-selector.component.ts` |
+| Backend allowlist and `users.preferred_locale` | `src/backend/prices-api/src/common/i18n/supported-locales.ts` |
+
+Resolution order: the authenticated user's stored preference → the locale cached
+in the browser for the login screen → `navigator.languages` → `es-419`.
+
+### Rules when adding UI copy
+
+1. **Never embed visible text in a component.** Put it in *both* catalogs and
+   reference it: `{{ 'namespace.key' | transloco }}` in a template, or
+   `{ key: 'namespace.key' }` in declarative configuration
+   (`ColumnConfig`, `FieldConfig`, `FieldOption`, `RowAction`, `PreviewResult`,
+   `CrudMessages`).
+2. **`DisplayText` has no plain-string arm.** Every label is either
+   `{ key: 'namespace.key' }` (translatable) or `{ text: value }` (business data
+   from the API). The Angular compiler enforces this, so an untranslated literal
+   fails `npm run build`.
+3. **Translate complete sentences with parameters**, never fragments. Do not
+   build `"Nuevo " + entity` or pluralise by appending `s`; write
+   `"Añadir {{entity}}"` and let the translator own word order, gender and number.
+4. **Business data stays literal**: company, product, price-list, marketplace,
+   discount, note and custom-role names are shown exactly as entered.
+   System values identified by a stable code or slug *are* translated
+   (`status.active`, `discountType.percentage`, `roles.systemRoles.<slug>`),
+   falling back to the raw value so a new backend code stays visible.
+5. **Keep both catalogs in step.** `en-US` and `es-419` must have identical key
+   sets and matching `{{placeholders}}`; a unit test enforces it.
+6. **Pick the catalog key path from the feature's top-level namespace**
+   (`common`, `crud`, `auth`, `shell`, `products`, `prices`, `settings`, ...).
+   Reuse `common.*` for generic field labels instead of duplicating them.
+
+### Before opening a pull request
+
+```bash
+cd src/frontend/prices-admin
+
+npm run i18n:check      # no embedded Spanish copy + every referenced key exists
+npm test                # unit tests, including catalog parity
+npm run build           # AOT type-checks every template binding
+```
+
+`i18n:check` runs two guards that live in `agent/i18n/`:
+
+- `scan-visible-copy.mjs` fails when user-visible Spanish copy is still embedded
+  in production source. Its whitelist is empty on purpose; add an entry only with
+  a written justification.
+- `check-keys.mjs` extracts every catalog key referenced by the code and verifies
+  it exists in **both** locales. A misspelt key is invisible to the Spanish scan
+  and would render as `common.actions` in the UI, which is why this second guard
+  exists.
+
+### Adding a third locale
+
+1. Add its BCP 47 code and metadata (`labelKey`, `fullLabelKey`, `direction`) to
+   `SUPPORTED_LOCALES` in **both** `core/i18n/supported-locales.ts` (frontend) and
+   `src/common/i18n/supported-locales.ts` (backend).
+2. Add the code to the frontend's `SUPPORTED_LOCALE_IDS` (the selector order is
+   explicit, not derived from `Object.keys`).
+3. Create `public/i18n/<locale>.json` with **every** key. The parity test reports
+   omissions, and `npm run i18n:keys` fails until they are all present.
+4. Add any locale-specific browser normalisation you need in
+   `normalizeBrowserLocale` / `resolveBrowserLocale`.
+5. No database migration: `users.preferred_locale` is a `VARCHAR(16)` validated
+   against the allowlist, not a database enum.
+
+The backend deliberately accepts only the canonical codes: mapping a browser tag
+such as `es-MX` or `en-GB` onto a supported locale is a presentation concern and
+happens only in the frontend.
+
+---
+
 
 ## Environment variables
 
@@ -631,10 +726,57 @@ Deliberately out of scope for phase 1, recommended next:
 | `P1001: Can't reach database server` | Start MySQL and verify `DATABASE_URL` (host, port, user, password, database). |
 | `Unknown database 'pricesgrid'` | `CREATE DATABASE pricesgrid;` then re-run `npm run migrate:dev`. |
 | `@prisma/client did not initialize yet` | Run `npm run prisma:generate`. |
+| Login returns `500 INTERNAL_ERROR` and the log says `The column 'pricesgrid.users.<x>' does not exist in the current database` | A migration exists in `prisma/migrations` but was never applied to this database (this is what a missing `preferred_locale` looked like). Check with `npx prisma migrate status`, then apply with `npm run migrate:deploy` (additive, non-destructive). |
+| `The column … does not exist` persists after applying migrations | The API process started before the column existed. `ts-node-dev` only watches source files, so restart `npm run dev`. |
+| `prisma:generate` fails with `EPERM … rename '…query_engine-…node'` | A Node process has the query engine loaded (usually the export worker). Stop it, regenerate, restart it — see [Regenerating the Prisma client while the export worker is running](#regenerating-the-prisma-client-while-the-export-worker-is-running). |
 | Login fails after seeding | Re-run `npm run seed` and confirm `ALLOW_DEMO_SEED=true` (or `NODE_ENV=development`); the users only exist with demo seeds. |
 | Frontend cannot reach the API (CORS) | Set `CORS_ORIGIN` to the exact Angular origin and restart the API. |
 | Refresh cookie not sent | The cookie is `HttpOnly` + `SameSite=Lax` and scoped to `/api/v1/auth`; use a client that supports cookies and enable CORS credentials. |
 | `npm run seed` loads no demo data | Demo seeds are gated — set `ALLOW_DEMO_SEED=true` or `NODE_ENV=development`. |
+
+### Regenerating the Prisma client while the export worker is running
+
+`prisma generate` replaces `node_modules/.prisma/client/query_engine-<platform>.node`. Windows refuses to
+overwrite that file while any process has it mapped, and the export worker
+(`npm run worker:exports`) keeps the Prisma client loaded for its whole lifetime. The symptom is a bare
+`EPERM ... rename` with no mention of who holds the file.
+
+Find the holder, regenerate, and bring the worker back:
+
+```powershell
+cd src/backend/prices-api
+
+# 1) Who has the engine loaded? This is the reliable check: it inspects the
+#    process modules instead of matching command lines.
+Get-Process node -ErrorAction SilentlyContinue | ForEach-Object {
+  $id = $_.Id
+  try {
+    if ($_.Modules.ModuleName -match 'query_engine') { "PID $id holds the query engine" }
+  } catch { }
+}
+
+# 2) Stop it (replace <PID> with the value from step 1). Usually it is the
+#    export worker:
+#      node ./node_modules/ts-node/dist/bin.js src/export-worker.ts
+Stop-Process -Id <PID> -Force
+
+# 3) Regenerate, then restart the worker
+npm run prisma:generate
+npm run worker:exports      # leave it running in its own terminal
+```
+
+> Do **not** identify the holder by grepping command lines for `export-worker`:
+> the shell running your search contains that text too, so it matches itself and
+> reports a process that is not the worker. Check the loaded module instead.
+
+Notes:
+
+- `npm run build`, `npm test` and `npm run test:cov` are **not** affected: only the engine swap is blocked, and
+  the generated TypeScript client is written before it. A failed `prisma:generate` therefore still updates
+  `index.d.ts`; the non-zero exit code is the only real symptom.
+- The same applies to a long-running `npm run dev` API server. In CI there is no such process, so the command
+  passes there.
+- The Prisma query engine file is platform-specific; only one process per machine can hold it for writing.
 
 ---
 

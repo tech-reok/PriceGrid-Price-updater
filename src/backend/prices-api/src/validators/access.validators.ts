@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from '../common/i18n/supported-locales';
 import { currencyCodeSchema, optionalText, recordStatusSchema, timeZoneSchema } from './common.validators';
 
 /**
@@ -17,6 +18,24 @@ export const loginSchema = z
   .strict();
 
 export const refreshSchema = z.object({}).strict();
+
+/**
+ * Canonical locale only. Regional/browser variants (`es`, `en`, `es-MX`,
+ * `en-GB`) are rejected on purpose: mapping a browser locale onto a supported
+ * one is a presentation concern owned by the frontend.
+ */
+export const preferredLocaleSchema = z.enum(SUPPORTED_LOCALES, {
+  errorMap: () => ({
+    message: `preferredLocale must be one of: ${SUPPORTED_LOCALES.join(', ')}`
+  })
+});
+
+/** Self-service body for `PATCH /auth/me/preferences` (strict, locale only). */
+export const updatePreferencesSchema = z
+  .object({
+    preferredLocale: preferredLocaleSchema
+  })
+  .strict();
 
 // --- Tenants (companies) ---------------------------------------------------
 
@@ -48,6 +67,10 @@ export const updateTenantTimeZoneSchema = z
 /**
  * `tenantId` is intentionally NOT accepted: the tenant always comes from the
  * resolved request context, never from the client payload.
+ *
+ * `preferredLocale` is the user's UI language. It is optional on create (the
+ * database default and the service both fall back to `es-419`) so existing
+ * clients keep working unchanged.
  */
 export const createUserSchema = z
   .object({
@@ -55,7 +78,8 @@ export const createUserSchema = z
     email: z.string().trim().email().max(190),
     password: z.string().min(8, 'password must be at least 8 characters').max(200),
     roleId: z.string().uuid(),
-    status: recordStatusSchema.optional()
+    status: recordStatusSchema.optional(),
+    preferredLocale: preferredLocaleSchema.default(DEFAULT_LOCALE)
   })
   .strict();
 
@@ -65,7 +89,8 @@ export const updateUserSchema = z
     email: z.string().trim().email().max(190).optional(),
     password: z.string().min(8).max(200).optional(),
     roleId: z.string().uuid().optional(),
-    status: recordStatusSchema.optional()
+    status: recordStatusSchema.optional(),
+    preferredLocale: preferredLocaleSchema.optional()
   })
   .strict();
 

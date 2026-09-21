@@ -10,6 +10,7 @@ import {
   ALL_PERMISSION_SLUGS,
   CURRENCIES,
   DEMO_TENANT,
+  DEMO_USER_LOCALE,
   PERMISSION_CATALOG,
   READONLY_USER_PERMISSIONS,
   SYSTEM_ROLES,
@@ -17,6 +18,7 @@ import {
   TENANT_USER_PERMISSIONS
 } from '../../prisma/seed/data';
 import { hashApiKey, PHASE_ONE_SCOPES } from '../../src/common/utils/api-key';
+import { DEFAULT_LOCALE, isSupportedLocale } from '../../src/common/i18n/supported-locales';
 import { createFakePrisma } from '../helpers/fake-prisma';
 
 describe('seed policy (demo seed protection)', () => {
@@ -205,6 +207,39 @@ describe('runSeeds orchestrator', () => {
       expect(user.passwordHash).not.toContain('ChangeMe');
       expect(user.passwordHash.length).toBeGreaterThan(20);
     }
+  });
+
+  it('gives every seeded user an explicit, supported locale', async () => {
+    const prisma = createFakePrisma();
+    await runSeeds(prisma, { allowDemo: true });
+
+    expect(DEMO_USER_LOCALE).toBe('es-419');
+    expect(isSupportedLocale(DEMO_USER_LOCALE)).toBe(true);
+    // Pinned explicitly rather than inherited, so the demo copy stays Spanish.
+    expect(DEFAULT_LOCALE).toBe('es-419');
+
+    for (const user of prisma.__store.user) {
+      expect(isSupportedLocale(user.preferredLocale)).toBe(true);
+      expect(user.preferredLocale).toBe('es-419');
+    }
+  });
+
+  it('keeps the seeded locale stable across reruns', async () => {
+    const prisma = createFakePrisma();
+    await runSeeds(prisma, { allowDemo: true });
+
+    // Simulate a user who switched to English between two seed runs.
+    prisma.__store.user.forEach((row: any) => {
+      row.preferredLocale = 'en-US';
+    });
+
+    await runSeeds(prisma, { allowDemo: true });
+
+    // The demo seed is a deterministic reset, so it restores the pinned locale.
+    expect(prisma.__store.user.map((row: any) => row.preferredLocale)).toEqual([
+      DEMO_USER_LOCALE,
+      DEMO_USER_LOCALE
+    ]);
   });
 
   it('writes price history with the system actor and reason=create', async () => {

@@ -8,26 +8,32 @@ import {
   ProductService
 } from '../../core/services/catalog.services';
 import { SessionStore } from '../../core/services/session.store';
-import { idOptionLoader, staticOptions } from '../../core/utils/options';
+import { idOptionLoader, recordStatusOptions, staticOptions } from '../../core/utils/options';
 import { toDateOnlyInputValue } from '../../core/utils/format';
 import { zodValidator } from '../../core/utils/validation';
-import type { ColumnConfig, FieldConfig } from '../../shared/crud-page.types';
+import { DisplayTextService } from '../../core/i18n/display-text.service';
+import type { ColumnConfig, DisplayText, FieldConfig } from '../../shared/crud-page.types';
 
 /**
  * Cross-field rules for the discount form (mirrors the API validator):
  * exactly one scope reference matching `appliesTo`, percentage <= 100 and a
  * valid date range.
+ *
+ * Messages are **catalog keys**, not sentences: `CrudPageComponent` resolves a
+ * field error through the catalog when the value is a known key, so the
+ * validation copy follows a runtime language switch instead of freezing the
+ * language that was active when the schema was built.
  */
 const discountFormSchema = z
   .object({
-    name: z.string().trim().min(1, 'El nombre es obligatorio'),
+    name: z.string().trim().min(1, 'discounts.validation.nameRequired'),
     type: z.enum(['percentage', 'fixed']),
-    value: z.coerce.number().nonnegative('El valor no puede ser negativo'),
+    value: z.coerce.number().nonnegative('discounts.validation.valueNonNegative'),
     appliesTo: z.enum(['product', 'price_list', 'marketplace']),
     productId: z.string().optional().nullable(),
     priceListId: z.string().optional().nullable(),
     marketplaceId: z.string().optional().nullable(),
-    startDate: z.string().min(1, 'La fecha de inicio es obligatoria'),
+    startDate: z.string().min(1, 'discounts.validation.startRequired'),
     endDate: z.string().optional().nullable()
   })
   .superRefine((data, ctx) => {
@@ -43,14 +49,14 @@ const discountFormSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [field],
-          message: 'Selecciona el registro al que aplica el descuento'
+          message: 'discounts.validation.scopeRequired'
         });
       }
       if (scope !== data.appliesTo && isSet) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [field],
-          message: 'Este campo no aplica para el alcance seleccionado'
+          message: 'discounts.validation.scopeNotApplicable'
         });
       }
     }
@@ -59,7 +65,7 @@ const discountFormSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['value'],
-        message: 'El porcentaje no puede ser mayor a 100'
+        message: 'discounts.validation.percentageMax'
       });
     }
 
@@ -67,7 +73,7 @@ const discountFormSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['endDate'],
-        message: 'La fecha de fin debe ser posterior a la de inicio'
+        message: 'discounts.validation.endAfterStart'
       });
     }
   });
@@ -78,11 +84,11 @@ const discountFormSchema = z
   imports: [CrudPageComponent],
   template: `
     <app-crud-page
-      title="Descuentos"
-      subtitle="Un solo descuento por precio, con prioridad producto → lista → marketplace."
-      entityLabel="descuento"
-      searchPlaceholder="Buscar por nombre…"
-      emptyMessage="Crea un descuento porcentual o de monto fijo con su vigencia."
+      [title]="{ key: 'discounts.title' }"
+      [subtitle]="{ key: 'discounts.subtitle' }"
+      [entityLabel]="{ key: 'discounts.entity' }"
+      [searchPlaceholder]="{ key: 'discounts.searchPlaceholder' }"
+      [emptyMessage]="{ key: 'discounts.emptyMessage' }"
       [columns]="columns"
       [fields]="fields"
       [service]="service"
@@ -102,76 +108,104 @@ export class DiscountsComponent {
   private readonly priceListService = inject(PriceListService);
   private readonly marketplaceService = inject(MarketplaceService);
   private readonly session = inject(SessionStore);
+  private readonly text = inject(DisplayTextService);
 
   readonly columns: ColumnConfig[] = [
-    { key: 'name', label: 'Nombre', sortable: true },
-    { key: 'type', label: 'Tipo' },
-    { key: 'value', label: 'Valor', align: 'right' },
-    { key: 'appliesTo', label: 'Aplica a' },
-    { key: 'priority', label: 'Prioridad', align: 'right' },
-    { key: 'startDate', label: 'Inicio', type: 'date', dateOnly: true },
-    { key: 'endDate', label: 'Fin', type: 'date', dateOnly: true },
-    { key: 'status', label: 'Estado', type: 'status' }
+    { key: 'name', label: { key: 'common.name' }, sortable: true },
+    // Enum codes: translated by their stable value, not by a formatted string.
+    { key: 'type', label: { key: 'common.type' }, value: (row) => this.codeLabel('discountType', row?.['type']) },
+    { key: 'value', label: { key: 'common.value' }, align: 'right' },
+    { key: 'appliesTo', label: { key: 'discounts.columns.appliesTo' }, value: (row) => this.codeLabel('discountScope', row?.['appliesTo']) },
+    { key: 'priority', label: { key: 'common.priority' }, align: 'right' },
+    { key: 'startDate', label: { key: 'discounts.columns.start' }, type: 'date', dateOnly: true },
+    { key: 'endDate', label: { key: 'discounts.columns.end' }, type: 'date', dateOnly: true },
+    { key: 'status', label: { key: 'common.status' }, type: 'status' }
   ];
 
   readonly fields: FieldConfig[] = [
-    { key: 'name', label: 'Nombre', type: 'text', required: true, placeholder: 'Descuento de temporada' },
+    {
+      key: 'name',
+      label: { key: 'common.name' },
+      type: 'text',
+      required: true,
+      placeholder: { key: 'discounts.fields.namePlaceholder' }
+    },
     {
       key: 'type',
-      label: 'Tipo de descuento',
+      label: { key: 'discounts.fields.type' },
       type: 'select',
       required: true,
       defaultValue: 'percentage',
       options: staticOptions([
-        ['percentage', 'Porcentaje'],
-        ['fixed', 'Monto fijo']
+        ['percentage', { key: 'discountType.percentage' }],
+        ['fixed', { key: 'discountType.fixed' }]
       ])
     },
-    { key: 'value', label: 'Valor', type: 'number', required: true, min: 0, step: 0.01, help: 'Porcentaje (0-100) o monto fijo.' },
+    {
+      key: 'value',
+      label: { key: 'common.value' },
+      type: 'number',
+      required: true,
+      min: 0,
+      step: 0.01,
+      help: { key: 'discounts.fields.valueHelp' }
+    },
     {
       key: 'appliesTo',
-      label: 'Aplicación',
+      label: { key: 'discounts.fields.appliesTo' },
       type: 'select',
       required: true,
       defaultValue: 'product',
       options: staticOptions([
-        ['product', 'Producto'],
-        ['price_list', 'Lista de precios'],
-        ['marketplace', 'Marketplace']
+        ['product', { key: 'discountScope.product' }],
+        ['price_list', { key: 'discountScope.price_list' }],
+        ['marketplace', { key: 'discountScope.marketplace' }]
       ])
     },
     {
       key: 'productId',
-      label: 'Producto relacionado',
+      label: { key: 'discounts.fields.relatedProduct' },
       type: 'select',
       optionsKey: 'products',
       visibleWhen: { key: 'appliesTo', equals: 'product' }
     },
     {
       key: 'priceListId',
-      label: 'Lista relacionada',
+      label: { key: 'discounts.fields.relatedPriceList' },
       type: 'select',
       optionsKey: 'priceLists',
       visibleWhen: { key: 'appliesTo', equals: 'price_list' }
     },
     {
       key: 'marketplaceId',
-      label: 'Marketplace relacionado',
+      label: { key: 'discounts.fields.relatedMarketplace' },
       type: 'select',
       optionsKey: 'marketplaces',
       visibleWhen: { key: 'appliesTo', equals: 'marketplace' }
     },
-    { key: 'startDate', label: 'Fecha de inicio', type: 'date', required: true },
-    { key: 'endDate', label: 'Fecha de fin', type: 'date', help: 'Opcional. Incluye todo el día seleccionado.' },
-    { key: 'priority', label: 'Prioridad', type: 'number', min: 0, defaultValue: 100, help: 'Menor valor = mayor prioridad.' },
+    { key: 'startDate', label: { key: 'common.startDate' }, type: 'date', required: true },
+    {
+      key: 'endDate',
+      label: { key: 'common.endDate' },
+      type: 'date',
+      help: { key: 'discounts.fields.endDateHelp' }
+    },
+    {
+      key: 'priority',
+      label: { key: 'common.priority' },
+      type: 'number',
+      min: 0,
+      defaultValue: 100,
+      help: { key: 'discounts.fields.priorityHelp' }
+    },
     {
       key: 'status',
-      label: 'Descuento activo',
+      label: { key: 'discounts.fields.active' },
       type: 'toggle',
       defaultValue: true,
-      help: 'Solo los descuentos activos se aplican al cálculo del precio final.'
+      help: { key: 'discounts.fields.activeHelp' }
     },
-    { key: 'description', label: 'Descripción', type: 'textarea', full: true }
+    { key: 'description', label: { key: 'common.description' }, type: 'textarea', full: true }
   ];
 
   readonly selectSources = {
@@ -214,5 +248,21 @@ export class DiscountsComponent {
 
   can(permission: string): boolean {
     return this.session.hasPermission(permission);
+  }
+
+  // --- internals -----------------------------------------------------------
+
+  /**
+   * Translates an enum code (`type`, `appliesTo`).
+   *
+   * The code is the stable API value. An unknown code falls back to the raw
+   * value so a new backend enum stays visible instead of rendering a raw key.
+   */
+  private codeLabel(namespace: string, code: unknown): DisplayText {
+    const value = typeof code === 'string' ? code : '';
+    if (value === '') return { text: '' };
+
+    const key = `${namespace}.${value}`;
+    return this.text.has(key) ? { key } : { text: value };
   }
 }

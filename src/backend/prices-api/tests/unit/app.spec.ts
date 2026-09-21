@@ -20,6 +20,15 @@ async function buildApp() {
         isSystem: true,
         status: 'active',
         deletedAt: null
+      },
+      {
+        id: 'role-global',
+        tenantId: null,
+        slug: 'global_admin',
+        name: 'Global administrator',
+        isSystem: true,
+        status: 'active',
+        deletedAt: null
       }
     ],
     rolePermission: [{ roleId: 'role-1', permissionId: 'perm-read' }],
@@ -32,6 +41,19 @@ async function buildApp() {
         passwordHash: await hashPassword('Password!123'),
         roleId: 'role-1',
         status: 'active',
+        preferredLocale: 'es-419',
+        deletedAt: null
+      },
+      {
+        // Global administrator with no company of their own.
+        id: 'user-global',
+        tenantId: null,
+        name: 'Global',
+        email: 'global@example.com',
+        passwordHash: await hashPassword('Password!123'),
+        roleId: 'role-global',
+        status: 'active',
+        preferredLocale: 'es-419',
         deletedAt: null
       }
     ],
@@ -235,5 +257,183 @@ describe('Express application wiring', () => {
     const response = await request(app).get('/api/v1/external/products').set('x-api-key', 'pg_wrong');
     expect(response.status).toBe(401);
     expect(response.body.code).toBe('INVALID_API_KEY');
+  });
+});
+
+describe('User language preferences endpoint', () => {
+  async function signIn(app: any, email = 'admin@example.com') {
+    const login = await request(app).post('/api/v1/auth/login').send({ email, password: 'Password!123' });
+    expect(login.status).toBe(200);
+    return { accessToken: login.body.accessToken as string, cookie: login.headers['set-cookie'] };
+  }
+
+  it('updates the authenticated user and returns the full context', async () => {
+    const { app } = await buildApp();
+    const { accessToken } = await signIn(app);
+
+    const response = await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .set('authorization', `Bearer ${accessToken}`)
+      .send({ preferredLocale: 'en-US' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: 'user-1',
+      email: 'admin@example.com',
+      roleSlug: 'tenant_admin',
+      preferredLocale: 'en-US'
+    });
+    // The locale is not authorization data and must not leak into a token.
+    expect(response.body.accessToken).toBeUndefined();
+    expect(response.body.passwordHash).toBeUndefined();
+  });
+
+  it('persists the change so a follow-up /auth/me returns it', async () => {
+    const { app, prisma } = await buildApp();
+    const { accessToken } = await signIn(app);
+
+    await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .set('authorization', `Bearer ${accessToken}`)
+      .send({ preferredLocale: 'en-US' });
+
+    const me = await request(app).get('/api/v1/auth/me').set('authorization', `Bearer ${accessToken}`);
+    expect(me.status).toBe(200);
+    expect(me.body.preferredLocale).toBe('en-US');
+
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-1').preferredLocale).toBe('en-US');
+  });
+
+  it('also returns the stored locale on login and refresh', async () => {
+    const { app, prisma } = await buildApp();
+    const { accessToken, cookie } = await signIn(app);
+
+    await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .set('authorization', `Bearer ${accessToken}`)
+      .send({ preferredLocale: 'en-US' });
+
+    const relogin = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'admin@example.com', password: 'Password!123' });
+    expect(relogin.body.user.preferredLocale).toBe('en-US');
+
+    const refreshed = await request(app).post('/api/v1/auth/refresh').set('Cookie', cookie);
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body.user.preferredLocale).toBe('en-US');
+
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-1').preferredLocale).toBe('en-US');
+  });
+
+  it('works for a global administrator without X-Tenant-Id', async () => {
+    const { app, prisma } = await buildApp();
+    const { accessToken } = await signIn(app, 'global@example.com');
+
+    const response = await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .set('authorization', `Bearer ${accessToken}`)
+      .send({ preferredLocale: 'en-US' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ id: 'user-global', isGlobalAdmin: true, preferredLocale: 'en-US' });
+    // No tenant context is required, and the tenant-less admin is still tenant-less.
+    expect(response.body.tenantId).toBeNull();
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-global').preferredLocale).toBe('en-US');
+  });
+
+  it('requires a valid access token', async () => {
+    const { app } = await buildApp();
+
+    const anonymous = await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .send({ preferredLocale: 'en-US' });
+    expect(anonymous.status).toBe(401);
+
+    const forged = await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .set('authorization', 'Bearer not-a-token')
+      .send({ preferredLocale: 'en-US' });
+    expect(forged.status).toBe(401);
+  });
+
+  it('rejects an unsupported locale with a stable validation code', async () => {
+    const { app, prisma } = await buildApp();
+    const { accessToken } = await signIn(app);
+
+    for (const rejected of ['es', 'en', 'es-MX', 'ES-419', 'fr-FR']) {
+      const response = await request(app)
+        .patch('/api/v1/auth/me/preferences')
+        .set('authorization', `Bearer ${accessToken}`)
+        .send({ preferredLocale: rejected });
+
+      expect(response.status).toBe(422);
+      expect(response.body.code).toBe('VALIDATION_ERROR');
+      expect(response.body.details[0]).toMatchObject({
+        field: 'preferredLocale',
+        code: 'UNSUPPORTED_VALUE',
+        params: { allowed: ['es-419', 'en-US'] }
+      });
+    }
+
+    // Nothing was persisted.
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-1').preferredLocale).toBe('es-419');
+  });
+
+  it('rejects unknown fields and cannot be pointed at another user', async () => {
+    const { app, prisma } = await buildApp();
+    const { accessToken } = await signIn(app);
+
+    const extraField = await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .set('authorization', `Bearer ${accessToken}`)
+      .send({ preferredLocale: 'en-US', userId: 'user-global' });
+    expect(extraField.status).toBe(422);
+    expect(extraField.body.code).toBe('VALIDATION_ERROR');
+
+    const empty = await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .set('authorization', `Bearer ${accessToken}`)
+      .send({});
+    expect(empty.status).toBe(422);
+
+    // Only the caller's own row is eligible to change.
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-global').preferredLocale).toBe('es-419');
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-1').preferredLocale).toBe('es-419');
+  });
+
+  it('does not rotate the refresh cookie when the language changes', async () => {
+    const { app, prisma } = await buildApp();
+    const { accessToken, cookie } = await signIn(app);
+
+    const response = await request(app)
+      .patch('/api/v1/auth/me/preferences')
+      .set('authorization', `Bearer ${accessToken}`)
+      .send({ preferredLocale: 'en-US' });
+
+    expect(response.headers['set-cookie']).toBeUndefined();
+
+    // The fake Prisma double does not apply column defaults, so "not revoked"
+    // means the field is falsy rather than strictly null.
+    const active = prisma.__store.refreshToken.filter(
+      (row: any) => row.userId === 'user-1' && !row.revokedAt
+    );
+    expect(active).toHaveLength(1);
+
+    // The original session stays usable.
+    const refreshed = await request(app).post('/api/v1/auth/refresh').set('Cookie', cookie);
+    expect(refreshed.status).toBe(200);
+  });
+
+  it('still requires tenant context and permissions on the administrative user CRUD', async () => {
+    const { app } = await buildApp();
+    const { accessToken } = await signIn(app, 'global@example.com');
+
+    // A global admin with no selected company cannot reach the admin users API.
+    const withoutTenant = await request(app)
+      .patch('/api/v1/users/user-1')
+      .set('authorization', `Bearer ${accessToken}`)
+      .send({ preferredLocale: 'en-US' });
+    expect(withoutTenant.status).toBe(401);
+    expect(withoutTenant.body.code).toBe('TENANT_REQUIRED');
   });
 });

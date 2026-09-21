@@ -222,6 +222,92 @@ describe('UserService', () => {
       ValidationError
     );
   });
+
+  it('defaults the locale to es-419 when the create payload omits it', async () => {
+    const { service, prisma } = build();
+    const created: any = await service.create(
+      TENANT,
+      { name: 'New', email: 'new@example.com', password: 'Password!123', roleId: 'role-system' },
+      ACTOR
+    );
+
+    expect(created.preferredLocale).toBe('es-419');
+    expect(prisma.__store.user.find((row: any) => row.id === created.id).preferredLocale).toBe('es-419');
+  });
+
+  it('persists both supported locales on administrative create', async () => {
+    const { service, prisma } = build();
+
+    for (const locale of ['es-419', 'en-US']) {
+      const created: any = await service.create(
+        TENANT,
+        {
+          name: `User ${locale}`,
+          email: `${locale}@example.com`,
+          password: 'Password!123',
+          roleId: 'role-system',
+          preferredLocale: locale
+        },
+        ACTOR
+      );
+
+      expect(created.preferredLocale).toBe(locale);
+      expect(prisma.__store.user.find((row: any) => row.id === created.id).preferredLocale).toBe(locale);
+    }
+  });
+
+  it('rejects an unsupported locale instead of silently coercing it', async () => {
+    const { service, prisma } = build();
+    const before = prisma.__store.user.length;
+
+    await expect(
+      service.create(
+        TENANT,
+        {
+          name: 'Bad',
+          email: 'bad@example.com',
+          password: 'Password!123',
+          roleId: 'role-system',
+          preferredLocale: 'es-MX'
+        },
+        ACTOR
+      )
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    await expect(service.update(TENANT, 'u1', { preferredLocale: 'fr-FR' }, ACTOR)).rejects.toBeInstanceOf(
+      ValidationError
+    );
+    // Nothing was written.
+    expect(prisma.__store.user).toHaveLength(before);
+    expect(prisma.__store.user.find((row: any) => row.id === 'u1').preferredLocale).toBeUndefined();
+  });
+
+  it('accepts a UI locale on update and keeps it isolated from other fields', async () => {
+    const { service, prisma } = build();
+
+    const updated: any = await service.update(TENANT, 'u1', { preferredLocale: 'en-US' }, ACTOR);
+
+    expect(updated.preferredLocale).toBe('en-US');
+    expect(prisma.__store.user.find((row: any) => row.id === 'u1').preferredLocale).toBe('en-US');
+    // An unrelated update preserves the stored preference.
+    expect(prisma.__store.user.find((row: any) => row.id === 'u1').email).toBe('existing@example.com');
+  });
+
+  it('leaves the stored locale untouched on an unrelated update', async () => {
+    const { service, prisma } = build();
+    prisma.__store.user.find((row: any) => row.id === 'u1').preferredLocale = 'en-US';
+
+    await service.update(TENANT, 'u1', { name: 'Renamed' }, ACTOR);
+
+    expect(prisma.__store.user.find((row: any) => row.id === 'u1').preferredLocale).toBe('en-US');
+  });
+
+  it('keeps the password hash out of the response after a locale change', async () => {
+    const { service } = build();
+    const updated: any = await service.update(TENANT, 'u1', { preferredLocale: 'en-US' }, ACTOR);
+
+    expect(updated.passwordHash).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

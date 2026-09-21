@@ -186,14 +186,17 @@ model RolePermission {
 }
 
 model User {
-  id           String       @id @default(uuid()) @db.VarChar(36)
-  tenantId     String?      @map("tenant_id") @db.VarChar(36)
-  name         String       @db.VarChar(150)
-  email        String       @unique @db.VarChar(190)
-  passwordHash String       @map("password_hash") @db.VarChar(255)
-  roleId       String       @map("role_id") @db.VarChar(36)
-  status       RecordStatus @default(active)
-  lastLoginAt  DateTime?    @map("last_login_at") @db.DateTime(3)
+  id              String       @id @default(uuid()) @db.VarChar(36)
+  tenantId        String?      @map("tenant_id") @db.VarChar(36)
+  name            String       @db.VarChar(150)
+  email           String       @unique @db.VarChar(190)
+  passwordHash    String       @map("password_hash") @db.VarChar(255)
+  roleId          String       @map("role_id") @db.VarChar(36)
+  status          RecordStatus @default(active)
+  /// Per-user UI language. VARCHAR + application allowlist, not a DB enum, so a
+  /// new locale never requires a migration. Belongs to the user, not the tenant.
+  preferredLocale String       @default("es-419") @map("preferred_locale") @db.VarChar(16)
+  lastLoginAt     DateTime?    @map("last_login_at") @db.DateTime(3)
 
   createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(3)

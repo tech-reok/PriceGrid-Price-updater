@@ -43,4 +43,19 @@ export class AuthController {
     if (!user) throw new UnauthorizedError();
     res.json(toPlain(await this.authService.me(user.id)));
   });
+
+  /**
+   * Self-service UI language update for the authenticated user.
+   *
+   * The target user always comes from the verified access token — never from
+   * the body or the route — so a caller cannot change somebody else's
+   * preference. No tenant context and no RBAC permission are required.
+   */
+  updatePreferences = asyncHandler(async (req: Request, res: Response) => {
+    const user = (req as RequestContext).user;
+    if (!user) throw new UnauthorizedError();
+
+    const { preferredLocale } = req.body ?? {};
+    res.json(toPlain(await this.authService.updatePreferences(user.id, preferredLocale)));
+  });
 }

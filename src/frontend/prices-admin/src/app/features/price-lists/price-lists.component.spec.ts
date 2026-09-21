@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideTranslocoTesting } from '../../testing';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { PriceListsComponent } from './price-lists.component';
@@ -11,6 +12,7 @@ describe('PriceListsComponent marketplace assignment', () => {
   let priceLists: { get: jasmine.Spy; setMarketplaces: jasmine.Spy };
 
   beforeEach(async () => {
+  window.localStorage.clear();
     priceLists = {
       get: jasmine.createSpy('get').and.returnValue(of({
         id: 'list-1',
@@ -20,7 +22,7 @@ describe('PriceListsComponent marketplace assignment', () => {
       setMarketplaces: jasmine.createSpy('setMarketplaces').and.returnValue(of({ marketplaceIds: [] }))
     };
     await TestBed.configureTestingModule({
-      imports: [PriceListsComponent],
+      imports: [PriceListsComponent, provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         { provide: PriceListService, useValue: priceLists },

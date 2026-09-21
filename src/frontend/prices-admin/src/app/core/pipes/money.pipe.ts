@@ -1,23 +1,18 @@
-import { Pipe, PipeTransform } from '@angular/core';
+import { Pipe, PipeTransform, inject } from '@angular/core';
+import { LocaleFormattingService } from '../i18n/locale-formatting.service';
 
-/** Formats a monetary amount using the price currency. */
-@Pipe({ name: 'money', standalone: true })
+/**
+ * Formats a monetary amount using the price currency.
+ *
+ * The currency code is never translated; only the separators and symbol
+ * placement follow the active locale. Delegates to `LocaleFormattingService`,
+ * and is impure so it re-renders after a language switch.
+ */
+@Pipe({ name: 'money', standalone: true, pure: false })
 export class MoneyPipe implements PipeTransform {
+  private readonly formatting = inject(LocaleFormattingService);
+
   transform(value: number | string | null | undefined, currency = 'MXN'): string {
-    if (value === null || value === undefined || value === '') return '—';
-
-    const amount = typeof value === 'string' ? Number(value) : value;
-    if (typeof amount !== 'number' || Number.isNaN(amount)) return '—';
-
-    try {
-      return new Intl.NumberFormat('es-MX', {
-        style: 'currency',
-        currency: currency || 'MXN',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }).format(amount);
-    } catch {
-      return `${amount.toFixed(2)} ${currency}`;
-    }
+    return this.formatting.formatMoney(value, currency);
   }
 }

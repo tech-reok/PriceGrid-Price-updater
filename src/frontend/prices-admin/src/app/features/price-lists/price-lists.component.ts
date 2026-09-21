@@ -1,25 +1,28 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { CrudPageComponent } from '../../shared/crud-page.component';
 import { ModalComponent } from '../../shared/modal.component';
 import { CurrencyService, MarketplaceService, PriceListService } from '../../core/services/catalog.services';
 import { SessionStore } from '../../core/services/session.store';
 import { ToastService } from '../../core/services/toast.service';
-import { currencyOptionLoader, staticOptions } from '../../core/utils/options';
+import { currencyOptionLoader, recordStatusOptions } from '../../core/utils/options';
+import { DisplayTextService } from '../../core/i18n/display-text.service';
+import { ApiErrorLocalizerService } from '../../core/i18n/api-error-localizer.service';
 import type { ColumnConfig, FieldConfig, PayloadMapper, RowAction } from '../../shared/crud-page.types';
 import type { Marketplace, PriceList } from '../../core/models';
 
 @Component({
   selector: 'app-price-lists',
   standalone: true,
-  imports: [CommonModule, CrudPageComponent, ModalComponent],
+  imports: [CommonModule, TranslocoPipe, CrudPageComponent, ModalComponent],
   template: `
     <app-crud-page
-      title="Listas de precios"
-      subtitle="Agrupa precios por canal o segmento y asígnalos a marketplaces."
-      entityLabel="lista de precios"
-      searchPlaceholder="Buscar por nombre…"
-      emptyMessage="Crea listas como Retail, Wholesale o Marketplace."
+      [title]="{ key: 'priceLists.title' }"
+      [subtitle]="{ key: 'priceLists.subtitle' }"
+      [entityLabel]="{ key: 'priceLists.entity' }"
+      [searchPlaceholder]="{ key: 'priceLists.searchPlaceholder' }"
+      [emptyMessage]="{ key: 'priceLists.emptyMessage' }"
       [columns]="columns"
       [fields]="fields"
       [service]="service"
@@ -31,24 +34,31 @@ import type { Marketplace, PriceList } from '../../core/models';
     />
     <app-modal
       [open]="marketplacesOpen()"
-      title="Marketplaces de la lista"
-      subtitle="Selecciona los marketplaces donde esta lista estará disponible."
+      [title]="'priceLists.modal.title' | transloco"
+      [subtitle]="'priceLists.modal.subtitle' | transloco"
       (closed)="closeMarketplaces()"
     >
       @if (marketplacesOpen()) {
         <div class="space-y-4">
-          <p class="text-sm text-olive">Lista: <span class="font-medium text-forest">{{ selectedPriceList()?.name }}</span></p>
+          <p class="text-sm text-olive">
+            {{ 'priceLists.modal.list' | transloco }}:
+            <span class="font-medium text-forest">{{ selectedPriceList()?.name }}</span>
+          </p>
           <div class="max-h-72 space-y-2 overflow-y-auto rounded-md border border-line p-3">
             @for (marketplace of availableMarketplaces(); track marketplace.id) {
               <label class="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-forest hover:bg-sidebar">
                 <input type="checkbox" [checked]="selectedMarketplaceIds().has(marketplace.id)" (change)="toggleMarketplace(marketplace.id)" />
                 <span>{{ marketplace.name }}</span>
               </label>
-            } @empty { <p class="text-sm text-olive">No hay marketplaces activos disponibles.</p> }
+            } @empty { <p class="text-sm text-olive">{{ 'priceLists.modal.empty' | transloco }}</p> }
           </div>
           <div class="flex justify-end gap-2">
-            <button type="button" class="rounded-md border border-line px-4 py-2 text-sm text-forest" (click)="closeMarketplaces()">Cancelar</button>
-            <button type="button" class="rounded-md bg-forest px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" [disabled]="marketplacesSaving()" (click)="saveMarketplaces()">{{ marketplacesSaving() ? 'Guardando…' : 'Guardar marketplaces' }}</button>
+            <button type="button" class="rounded-md border border-line px-4 py-2 text-sm text-forest" (click)="closeMarketplaces()">
+              {{ 'common.cancel' | transloco }}
+            </button>
+            <button type="button" class="rounded-md bg-forest px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" [disabled]="marketplacesSaving()" (click)="saveMarketplaces()">
+              {{ marketplacesSaving() ? ('common.saving' | transloco) : ('priceLists.modal.save' | transloco) }}
+            </button>
           </div>
         </div>
       }
@@ -61,34 +71,44 @@ export class PriceListsComponent {
   private readonly marketplaceService = inject(MarketplaceService);
   private readonly session = inject(SessionStore);
   private readonly toast = inject(ToastService);
+  private readonly text = inject(DisplayTextService);
+  private readonly errorLocalizer = inject(ApiErrorLocalizerService);
 
   readonly columns: ColumnConfig[] = [
-    { key: 'name', label: 'Nombre', sortable: true },
-    { key: 'description', label: 'Descripción' },
-    { key: 'currencyCode', label: 'Moneda' },
-    { key: 'status', label: 'Estado', type: 'status' }
+    { key: 'name', label: { key: 'common.name' }, sortable: true },
+    { key: 'description', label: { key: 'common.description' } },
+    { key: 'currencyCode', label: { key: 'common.currency' } },
+    { key: 'status', label: { key: 'common.status' }, type: 'status' }
   ];
 
   readonly fields: FieldConfig[] = [
-    { key: 'name', label: 'Nombre', type: 'text', required: true, placeholder: 'Retail' },
-    { key: 'description', label: 'Descripción', type: 'text', placeholder: 'Lista de precios minorista' },
+    {
+      key: 'name',
+      label: { key: 'common.name' },
+      type: 'text',
+      required: true,
+      placeholder: { key: 'priceLists.fields.namePlaceholder' }
+    },
+    {
+      key: 'description',
+      label: { key: 'common.description' },
+      type: 'text',
+      placeholder: { key: 'priceLists.fields.descriptionPlaceholder' }
+    },
     {
       key: 'currencyCode',
-      label: 'Moneda',
+      label: { key: 'common.currency' },
       type: 'select',
       optionsKey: 'currencies',
-      help: 'Opcional: si se omite se usa la moneda de la empresa.'
+      help: { key: 'priceLists.fields.currencyHelp' }
     },
     {
       key: 'status',
-      label: 'Estado',
+      label: { key: 'common.status' },
       type: 'select',
       required: true,
       defaultValue: 'active',
-      options: staticOptions([
-        ['active', 'Activo'],
-        ['inactive', 'Inactivo']
-      ])
+      options: recordStatusOptions()
     }
   ];
 
@@ -104,7 +124,7 @@ export class PriceListsComponent {
 
   readonly rowActions: RowAction[] = [
     {
-      label: 'Marketplaces',
+      label: { key: 'priceLists.rowActions.marketplaces' },
       visible: () => this.can('price-lists:update'),
       run: (row) => this.openMarketplaces(row)
     }
@@ -131,7 +151,7 @@ export class PriceListsComponent {
     });
     this.service.get(priceList.id).subscribe({
       next: (current) => this.selectedMarketplaceIds.set(new Set(current.priceListMarketplaces?.map((row) => row.marketplace.id) ?? [])),
-      error: (error) => this.toast.error(error?.error?.message ?? 'No se pudieron cargar los marketplaces de la lista')
+      error: (error) => this.toast.error(this.errorLocalizer.message(error, { fallbackKey: 'priceLists.errors.load' }))
     });
   }
 
@@ -149,11 +169,11 @@ export class PriceListsComponent {
       next: () => {
         this.marketplacesSaving.set(false);
         this.marketplacesOpen.set(false);
-        this.toast.success('Marketplaces actualizados');
+        this.toast.success(this.text.translate('priceLists.toasts.saved'));
       },
       error: (error) => {
         this.marketplacesSaving.set(false);
-        this.toast.error(error?.error?.message ?? 'No se pudieron guardar los marketplaces');
+        this.toast.error(this.errorLocalizer.message(error, { fallbackKey: 'priceLists.errors.save' }));
       }
     });
   }

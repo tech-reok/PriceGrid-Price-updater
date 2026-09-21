@@ -16,6 +16,7 @@ import { PriceService } from './price.service';
 import { DashboardService } from './dashboard.service';
 import { AuthService } from './auth.service';
 import { SessionStore } from './session.store';
+import { provideTranslocoTesting } from '../../testing';
 import type { AuthUser } from '../models';
 
 const API = environment.apiUrl;
@@ -29,7 +30,8 @@ function authUser(): AuthUser {
     roleSlug: 'tenant_admin',
     tenantId: 'tenant-1',
     isGlobalAdmin: false,
-    permissions: ['products:read']
+    permissions: ['products:read'],
+    preferredLocale: 'es-419'
   };
 }
 
@@ -37,7 +39,9 @@ describe('catalog services', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
+  window.localStorage.clear();
     TestBed.configureTestingModule({
+      imports: [provideTranslocoTesting()],
       providers: [provideHttpClient(), provideHttpClientTesting()]
     });
     http = TestBed.inject(HttpTestingController);
@@ -136,7 +140,9 @@ describe('price service', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
+  window.localStorage.clear();
     TestBed.configureTestingModule({
+      imports: [provideTranslocoTesting()],
       providers: [provideHttpClient(), provideHttpClientTesting()]
     });
     http = TestBed.inject(HttpTestingController);
@@ -183,7 +189,9 @@ describe('access services', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
+  window.localStorage.clear();
     TestBed.configureTestingModule({
+      imports: [provideTranslocoTesting()],
       providers: [provideHttpClient(), provideHttpClientTesting()]
     });
     http = TestBed.inject(HttpTestingController);
@@ -246,7 +254,9 @@ describe('dashboard service', () => {
   let http: HttpTestingController;
 
   beforeEach(() => {
+  window.localStorage.clear();
     TestBed.configureTestingModule({
+      imports: [provideTranslocoTesting()],
       providers: [provideHttpClient(), provideHttpClientTesting()]
     });
     http = TestBed.inject(HttpTestingController);
@@ -276,7 +286,9 @@ describe('auth service', () => {
   let session: SessionStore;
 
   beforeEach(() => {
+  window.localStorage.clear();
     TestBed.configureTestingModule({
+      imports: [provideTranslocoTesting()],
       providers: [provideHttpClient(), provideHttpClientTesting()]
     });
     http = TestBed.inject(HttpTestingController);

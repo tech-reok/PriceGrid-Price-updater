@@ -1,0 +1,232 @@
+{
+  "permissions": {
+    "tenants:read": {
+      "name": "View companies",
+      "description": "Allows viewing companies"
+    },
+    "tenants:create": {
+      "name": "Create companies",
+      "description": "Allows creating companies"
+    },
+    "tenants:update": {
+      "name": "Update companies",
+      "description": "Allows updating companies"
+    },
+    "tenants:delete": {
+      "name": "Delete companies",
+      "description": "Allows deleting companies"
+    },
+    "tenants:switch": {
+      "name": "Switch company",
+      "description": "Allows switching company"
+    },
+    "users:read": {
+      "name": "View users",
+      "description": "Allows viewing users"
+    },
+    "users:create": {
+      "name": "Create users",
+      "description": "Allows creating users"
+    },
+    "users:update": {
+      "name": "Update users",
+      "description": "Allows updating users"
+    },
+    "users:delete": {
+      "name": "Delete users",
+      "description": "Allows deleting users"
+    },
+    "roles:read": {
+      "name": "View roles",
+      "description": "Allows viewing roles"
+    },
+    "roles:create": {
+      "name": "Create roles",
+      "description": "Allows creating roles"
+    },
+    "roles:update": {
+      "name": "Update roles",
+      "description": "Allows updating roles"
+    },
+    "roles:delete": {
+      "name": "Delete roles",
+      "description": "Allows deleting roles"
+    },
+    "roles:assign-permissions": {
+      "name": "Assign permissions",
+      "description": "Allows assigning permissions to a role"
+    },
+    "permissions:read": {
+      "name": "View permissions",
+      "description": "Allows viewing permissions"
+    },
+    "products:read": {
+      "name": "View products",
+      "description": "Allows viewing products"
+    },
+    "products:create": {
+      "name": "Create products",
+      "description": "Allows creating products"
+    },
+    "products:update": {
+      "name": "Update products",
+      "description": "Allows updating products"
+    },
+    "products:delete": {
+      "name": "Delete products",
+      "description": "Allows deleting products"
+    },
+    "marketplaces:read": {
+      "name": "View marketplaces",
+      "description": "Allows viewing marketplaces"
+    },
+    "marketplaces:create": {
+      "name": "Create marketplaces",
+      "description": "Allows creating marketplaces"
+    },
+    "marketplaces:update": {
+      "name": "Update marketplaces",
+      "description": "Allows updating marketplaces"
+    },
+    "marketplaces:delete": {
+      "name": "Delete marketplaces",
+      "description": "Allows deleting marketplaces"
+    },
+    "price-lists:read": {
+      "name": "View price lists",
+      "description": "Allows viewing price lists"
+    },
+    "price-lists:create": {
+      "name": "Create price lists",
+      "description": "Allows creating price lists"
+    },
+    "price-lists:update": {
+      "name": "Update price lists",
+      "description": "Allows updating price lists"
+    },
+    "price-lists:delete": {
+      "name": "Delete price lists",
+      "description": "Allows deleting price lists"
+    },
+    "prices:read": {
+      "name": "View prices",
+      "description": "Allows viewing prices"
+    },
+    "prices:create": {
+      "name": "Create prices",
+      "description": "Allows creating prices"
+    },
+    "prices:update": {
+      "name": "Update prices",
+      "description": "Allows updating prices"
+    },
+    "prices:delete": {
+      "name": "Delete prices",
+      "description": "Allows deleting prices"
+    },
+    "prices:calculate": {
+      "name": "Calculate prices",
+      "description": "Allows calculating prices"
+    },
+    "discounts:read": {
+      "name": "View discounts",
+      "description": "Allows viewing discounts"
+    },
+    "discounts:create": {
+      "name": "Create discounts",
+      "description": "Allows creating discounts"
+    },
+    "discounts:update": {
+      "name": "Update discounts",
+      "description": "Allows updating discounts"
+    },
+    "discounts:delete": {
+      "name": "Delete discounts",
+      "description": "Allows deleting discounts"
+    },
+    "price-catalog:read": {
+      "name": "View price catalog",
+      "description": "Allows viewing price catalog"
+    },
+    "price-catalog:read-all": {
+      "name": "View all price catalog",
+      "description": "Allows viewing all price catalog"
+    },
+    "price-catalog:export": {
+      "name": "Export price catalog",
+      "description": "Allows exporting price catalog"
+    },
+    "price-list-access:read": {
+      "name": "View price-list access",
+      "description": "Allows viewing price-list access"
+    },
+    "price-list-access:manage": {
+      "name": "Manage price-list access",
+      "description": "Allows managing price-list access"
+    },
+    "price-history:read": {
+      "name": "View price history",
+      "description": "Allows viewing price history"
+    },
+    "api-keys:read": {
+      "name": "View API keys",
+      "description": "Allows viewing API keys"
+    },
+    "api-keys:create": {
+      "name": "Create API keys",
+      "description": "Allows creating API keys"
+    },
+    "api-keys:update": {
+      "name": "Update API keys",
+      "description": "Allows updating API keys"
+    },
+    "api-keys:delete": {
+      "name": "Delete API keys",
+      "description": "Allows deleting API keys"
+    },
+    "api-keys:revoke": {
+      "name": "Revoke API keys",
+      "description": "Allows revoking API keys"
+    },
+    "currencies:read": {
+      "name": "View currencies",
+      "description": "Allows viewing currencies"
+    },
+    "dashboard:read": {
+      "name": "View dashboard",
+      "description": "Allows viewing dashboard"
+    },
+    "settings:read": {
+      "name": "View settings",
+      "description": "Allows viewing settings"
+    },
+    "settings:update": {
+      "name": "Update settings",
+      "description": "Allows updating settings"
+    }
+  },
+  "roles": {
+    "systemRoles": {
+      "global_admin": {
+        "name": "Global administrator",
+        "description": "Full access across every company"
+      },
+      "tenant_admin": {
+        "name": "Company administrator",
+        "description": "Full access inside the company, excluding global company management"
+      },
+      "tenant_user": {
+        "name": "Company operator",
+        "description": "Operational read/write access on the main catalog modules"
+      },
+      "readonly_user": {
+        "name": "Read-only user",
+        "description": "Read-only access to the price catalog"
+      },
+      "price_catalog_viewer": {
+        "name": "Price catalog viewer",
+        "description": "Read and export assigned price lists only"
+      }
+    }
+  }
+}

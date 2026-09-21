@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { hasCatalogKey, installTestTranslations, provideTranslocoTesting } from '../testing';
 import { provideRouter } from '@angular/router';
 import { FormControl, FormGroup } from '@angular/forms';
 import { of, throwError } from 'rxjs';
@@ -30,7 +31,8 @@ function authUser(permissions: string[] = []): AuthUser {
     roleSlug: 'tenant_admin',
     tenantId: 'tenant-1',
     isGlobalAdmin: false,
-    permissions
+    permissions,
+    preferredLocale: 'es-419'
   };
 }
 
@@ -61,6 +63,7 @@ describe('PricesComponent logic', () => {
   let priceService: any;
 
   beforeEach(async () => {
+  window.localStorage.clear();
     priceService = {
       ...resource(),
       calculate: jasmine.createSpy('calculate').and.returnValue(
@@ -75,7 +78,7 @@ describe('PricesComponent logic', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [PricesComponent],
+      imports: [PricesComponent, provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         { provide: PriceService, useValue: priceService },
@@ -86,6 +89,7 @@ describe('PricesComponent logic', () => {
         { provide: ToastService, useValue: noopToast() }
       ]
     }).compileComponents();
+    installTestTranslations();
 
     const fixture = TestBed.createComponent(PricesComponent);
     fixture.detectChanges();
@@ -164,13 +168,19 @@ describe('PricesComponent logic', () => {
         currencyCode: 'MXN'
       })
       .subscribe((results) => {
+        // Labels are catalog keys resolved while rendering, not frozen strings.
         expect(results.map((result) => result.label)).toEqual([
-          'Precio base',
-          'Descuento aplicado',
-          'Precio final'
+          { key: 'prices.preview.basePrice' },
+          { key: 'prices.preview.discount' },
+          { key: 'prices.preview.finalPrice' }
         ]);
-        expect(results[1].value).toBe('Verano');
-        expect(results[1].hint).toContain('product');
+        // The discount name is business data, so it stays literal.
+        expect(results[1].value).toEqual({ text: 'Verano' });
+        // The hint is a complete translated sentence with parameters.
+        expect(results[1].hint).toEqual({
+          key: 'prices.preview.discountHint',
+          params: { scope: 'Producto', amount: jasmine.any(String) }
+        });
         done();
       });
   });
@@ -183,8 +193,8 @@ describe('PricesComponent logic', () => {
     component
       .previewRunner({ productId: 'p1', priceListId: 'l1', marketplaceId: 'm1', basePrice: 100, currencyCode: 'MXN' })
       .subscribe((results) => {
-        expect(results[1].value).toBe('Ninguno');
-        expect(results[1].hint).toContain('precio base');
+        expect(results[1].value).toEqual({ key: 'prices.preview.none' });
+        expect(results[1].hint).toEqual({ key: 'prices.preview.basePriceUsed' });
         done();
       });
   });
@@ -200,7 +210,8 @@ describe('PricesComponent logic', () => {
 
   it('builds the product select options with SKU and name', (done) => {
     component.selectSources.products().subscribe((options) => {
-      expect(options).toEqual([{ value: 'p1', label: 'SKU-1 — Cafetera' }]);
+      // SKU and name are business data, so the label is a literal.
+      expect(options).toEqual([{ value: 'p1', label: { text: 'SKU-1 — Cafetera' } }]);
       done();
     });
   });
@@ -231,8 +242,9 @@ describe('DiscountsComponent logic', () => {
   let component: DiscountsComponent;
 
   beforeEach(async () => {
+  window.localStorage.clear();
     await TestBed.configureTestingModule({
-      imports: [DiscountsComponent],
+      imports: [DiscountsComponent, provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         { provide: DiscountService, useValue: resource() },
@@ -242,6 +254,7 @@ describe('DiscountsComponent logic', () => {
         { provide: ToastService, useValue: noopToast() }
       ]
     }).compileComponents();
+    installTestTranslations();
 
     const fixture = TestBed.createComponent(DiscountsComponent);
     fixture.detectChanges();
@@ -343,28 +356,45 @@ describe('DiscountsComponent logic', () => {
     const validator = component.crossValidators[0];
     const errors = validator(formFor({ ...baseValues, productId: '' }));
 
-    expect(errors!['zod']['productId']).toContain('Selecciona');
+    // Cross-field messages are catalog keys; CrudPageComponent resolves them so
+    // the copy follows a runtime language switch.
+    expect(errors!['zod']['productId']).toBe('discounts.validation.scopeRequired');
   });
 
   it('rejects scope references that do not match appliesTo', () => {
     const validator = component.crossValidators[0];
     const errors = validator(formFor({ ...baseValues, priceListId: 'l1' }));
 
-    expect(errors!['zod']['priceListId']).toContain('no aplica');
+    expect(errors!['zod']['priceListId']).toBe('discounts.validation.scopeNotApplicable');
   });
 
   it('rejects a percentage above 100', () => {
     const validator = component.crossValidators[0];
     const errors = validator(formFor({ ...baseValues, value: 150 }));
 
-    expect(errors!['zod']['value']).toContain('100');
+    expect(errors!['zod']['value']).toBe('discounts.validation.percentageMax');
   });
 
   it('rejects an end date before the start date', () => {
     const validator = component.crossValidators[0];
     const errors = validator(formFor({ ...baseValues, endDate: '2023-12-01' }));
 
-    expect(errors!['zod']['endDate']).toContain('posterior');
+    expect(errors!['zod']['endDate']).toBe('discounts.validation.endAfterStart');
+  });
+
+  it('every cross-field message resolves in both catalogs', () => {
+    const validator = component.crossValidators[0];
+    const keys = [
+      validator(formFor({ ...baseValues, productId: '' }))!['zod']['productId'],
+      validator(formFor({ ...baseValues, priceListId: 'l1' }))!['zod']['priceListId'],
+      validator(formFor({ ...baseValues, value: 150 }))!['zod']['value'],
+      validator(formFor({ ...baseValues, endDate: '2023-12-01' }))!['zod']['endDate']
+    ];
+
+    for (const key of keys) {
+      expect(hasCatalogKey('es-419', key)).withContext(`es-419.${key}`).toBe(true);
+      expect(hasCatalogKey('en-US', key)).withContext(`en-US.${key}`).toBe(true);
+    }
   });
 
   it('validates a price-list scoped discount', () => {
@@ -399,17 +429,19 @@ describe('ApiKeysComponent logic', () => {
   let toast: any;
 
   beforeEach(async () => {
+  window.localStorage.clear();
     apiKeyService = { ...resource(), revoke: jasmine.createSpy('revoke').and.returnValue(of({ status: 'revoked' })) };
     toast = noopToast();
 
     await TestBed.configureTestingModule({
-      imports: [ApiKeysComponent],
+      imports: [ApiKeysComponent, provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         { provide: ApiKeyService, useValue: apiKeyService },
         { provide: ToastService, useValue: toast }
       ]
     }).compileComponents();
+    installTestTranslations();
 
     const fixture = TestBed.createComponent(ApiKeysComponent);
     fixture.detectChanges();
@@ -472,6 +504,7 @@ describe('RolesComponent logic', () => {
   let toast: any;
 
   beforeEach(async () => {
+  window.localStorage.clear();
     roleService = {
       ...resource(),
       permissions: jasmine.createSpy('permissions').and.returnValue(of({ permissionSlugs: ['products:read'] })),
@@ -486,7 +519,7 @@ describe('RolesComponent logic', () => {
     toast = noopToast();
 
     await TestBed.configureTestingModule({
-      imports: [RolesComponent],
+      imports: [RolesComponent, provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         { provide: RoleService, useValue: roleService },
@@ -494,6 +527,7 @@ describe('RolesComponent logic', () => {
         { provide: ToastService, useValue: toast }
       ]
     }).compileComponents();
+    installTestTranslations();
 
     const fixture = TestBed.createComponent(RolesComponent);
     fixture.detectChanges();

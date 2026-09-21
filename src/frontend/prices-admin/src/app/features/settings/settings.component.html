@@ -1,23 +1,23 @@
 <div class="space-y-6">
   <div>
-    <h1 class="text-2xl font-bold text-forest">Configuración</h1>
-    <p class="text-sm text-olive mt-1">Catálogos del sistema y contexto de la sesión actual.</p>
+    <h1 class="text-2xl font-bold text-forest">{{ 'settings.title' | transloco }}</h1>
+    <p class="text-sm text-olive mt-1">{{ 'settings.subtitle' | transloco }}</p>
   </div>
 
   <!-- Session context -->
   <div class="pg-card p-5">
-    <h2 class="text-sm font-semibold text-forest mb-3">Sesión actual</h2>
+    <h2 class="text-sm font-semibold text-forest mb-3">{{ 'settings.session.title' | transloco }}</h2>
     <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
       <div>
-        <dt class="text-xs uppercase tracking-wide text-olive">Usuario</dt>
+        <dt class="text-xs uppercase tracking-wide text-olive">{{ 'settings.session.user' | transloco }}</dt>
         <dd class="font-medium text-forest mt-0.5">{{ session.user()?.name ?? '—' }}</dd>
       </div>
       <div>
-        <dt class="text-xs uppercase tracking-wide text-olive">Rol</dt>
+        <dt class="text-xs uppercase tracking-wide text-olive">{{ 'settings.session.role' | transloco }}</dt>
         <dd class="font-medium text-forest mt-0.5">{{ session.user()?.roleSlug ?? '—' }}</dd>
       </div>
       <div>
-        <dt class="text-xs uppercase tracking-wide text-olive">Permisos</dt>
+        <dt class="text-xs uppercase tracking-wide text-olive">{{ 'settings.session.permissions' | transloco }}</dt>
         <dd class="font-medium text-forest mt-0.5">{{ session.permissions().length }}</dd>
       </div>
     </dl>
@@ -26,18 +26,18 @@
   <div class="pg-card p-5">
     <div class="flex items-start justify-between gap-4">
       <div>
-        <h2 class="text-lg font-semibold text-forest">Zona horaria de la empresa</h2>
-        <p class="text-sm text-olive mt-1">Las fechas de precios y descuentos usan el calendario de esta zona.</p>
+        <h2 class="text-lg font-semibold text-forest">{{ 'settings.timeZone.title' | transloco }}</h2>
+        <p class="text-sm text-olive mt-1">{{ 'settings.timeZone.subtitle' | transloco }}</p>
       </div>
       <lucide-icon name="globe-2" class="w-5 h-5 text-forest"></lucide-icon>
     </div>
     <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
       <label class="flex-1 text-sm text-olive">
-        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide">Zona IANA</span>
+        <span class="mb-1 block text-xs font-semibold uppercase tracking-wide">{{ 'settings.timeZone.label' | transloco }}</span>
         <input
           type="search"
           class="mb-2 w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-forest"
-          placeholder="Buscar zona o ciudad..."
+          [placeholder]="'settings.timeZone.searchPlaceholder' | transloco"
           [value]="timeZoneSearch()"
           [disabled]="timeZoneSaving()"
           (input)="timeZoneSearch.set($any($event.target).value)"
@@ -54,7 +54,7 @@
         </select>
       </label>
       <div class="text-sm text-olive sm:min-w-52">
-        <span class="block text-xs font-semibold uppercase tracking-wide">Hora local de negocio</span>
+        <span class="block text-xs font-semibold uppercase tracking-wide">{{ 'settings.timeZone.clockLabel' | transloco }}</span>
         <span class="mt-2 block font-medium text-forest">{{ currentBusinessTime() }}</span>
       </div>
       @if (session.hasPermission('settings:update')) {
@@ -64,7 +64,7 @@
           [disabled]="timeZoneSaving()"
           (click)="saveTimeZone()"
         >
-          {{ timeZoneSaving() ? 'Guardando...' : 'Guardar zona horaria' }}
+          {{ timeZoneSaving() ? ('settings.timeZone.saving' | transloco) : ('settings.timeZone.save' | transloco) }}
         </button>
       }
     </div>
@@ -77,37 +77,41 @@
         <lucide-icon name="lock" class="w-4 h-4"></lucide-icon>
       </div>
       <div>
-        <h2 class="text-lg font-semibold text-forest">Monedas</h2>
+        <h2 class="text-lg font-semibold text-forest">{{ 'settings.currencies.title' | transloco }}</h2>
         <p class="text-sm text-olive mt-0.5">
-          En la fase 1 el catálogo de monedas es de sólo lectura. Se usa para validar el código ISO y
-          redondear los precios; no hay conversión automática.
+          {{ 'settings.currencies.description' | transloco }}
         </p>
       </div>
     </div>
 
     @if (loading()) {
-      <app-state-panel state="loading" message="Cargando monedas…" />
+      <app-state-panel state="loading" [message]="'settings.currencies.loading' | transloco" />
     } @else if (error()) {
       <app-state-panel state="error" [message]="error()!" [showRetry]="false" />
     } @else if (currencies().length === 0) {
-      <app-state-panel state="empty" title="Sin monedas" message="Ejecuta los seeds para cargar MXN y USD." />
+      <app-state-panel
+        state="empty"
+        [title]="'settings.currencies.emptyTitle' | transloco"
+        [message]="'settings.currencies.emptyMessage' | transloco"
+      />
     } @else {
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-olive" data-testid="currencies-table">
           <thead class="bg-sidebar/60 text-xs uppercase font-semibold text-forest">
             <tr>
-              <th class="px-5 py-3">Código</th>
-              <th class="px-5 py-3">Nombre</th>
-              <th class="px-5 py-3">Símbolo</th>
-              <th class="px-5 py-3 text-right">Decimales</th>
-              <th class="px-5 py-3">Estado</th>
+              <th class="px-5 py-3">{{ 'settings.currencies.columns.code' | transloco }}</th>
+              <th class="px-5 py-3">{{ 'settings.currencies.columns.name' | transloco }}</th>
+              <th class="px-5 py-3">{{ 'settings.currencies.columns.symbol' | transloco }}</th>
+              <th class="px-5 py-3 text-right">{{ 'settings.currencies.columns.decimals' | transloco }}</th>
+              <th class="px-5 py-3">{{ 'settings.currencies.columns.status' | transloco }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-line/60">
             @for (currency of currencies(); track currency.code) {
               <tr class="hover:bg-sidebar/30 transition-colors">
+                <!-- `code` stays the primary identifier; the name is localized when `Intl.DisplayNames` knows it. -->
                 <td class="px-5 py-3 font-medium text-forest">{{ currency.code }}</td>
-                <td class="px-5 py-3">{{ currency.name }}</td>
+                <td class="px-5 py-3">{{ formatting.displayName(currency.code, 'currency') ?? currency.name }}</td>
                 <td class="px-5 py-3">{{ currency.symbol }}</td>
                 <td class="px-5 py-3 text-right">{{ currency.decimals }}</td>
                 <td class="px-5 py-3"><app-status-badge [value]="currency.status" /></td>
@@ -125,11 +129,10 @@
       <lucide-icon name="info" class="w-4 h-4"></lucide-icon>
     </div>
     <div class="text-sm text-olive">
-      <p class="font-medium text-forest">Reglas de descuento vigentes</p>
+      <p class="font-medium text-forest">{{ 'settings.discountRules.title' | transloco }}</p>
       <p class="mt-1">
-        Se aplica <strong>un único descuento</strong> por precio, con prioridad
-        producto → lista de precios → marketplace → precio base. La acumulación de descuentos
-        y la conversión de moneda están planificadas para fases futuras.
+        <strong>{{ 'settings.discountRules.singleDiscount' | transloco }}</strong>
+        {{ 'settings.discountRules.stacking' | transloco }}
       </p>
     </div>
   </div>

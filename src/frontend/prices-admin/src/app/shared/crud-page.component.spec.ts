@@ -1,11 +1,13 @@
 import { Component } from '@angular/core';
+import { installTestTranslations, provideTranslocoTesting } from '../testing';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Subject, of, throwError } from 'rxjs';
 import { CrudPageComponent } from './crud-page.component';
 import { ToastService } from '../core/services/toast.service';
+import { LanguageService } from '../core/i18n/language.service';
 import type { CrudResource } from '../core/services/crud-resource';
-import type { ColumnConfig, FieldConfig } from './crud-page.types';
+import type { ColumnConfig, CrudMessages, FieldConfig, RowAction } from './crud-page.types';
 
 class FakeResource {
   list = jasmine
@@ -31,6 +33,8 @@ class FakeResource {
       entityLabel="producto"
       [columns]="columns"
       [fields]="fields"
+      [rowActions]="rowActions"
+      [messages]="crudMessages"
       [service]="service"
       [canCreate]="true"
       [canEdit]="true"
@@ -42,14 +46,20 @@ class FakeResource {
 class HostComponent {
   service: CrudResource<any> = new FakeResource() as unknown as CrudResource<any>;
   columns: ColumnConfig[] = [
-    { key: 'name', label: 'Nombre', sortable: true },
-    { key: 'basePrice', label: 'Precio', type: 'money', currencyKey: 'currencyCode' },
-    { key: 'status', label: 'Estado', type: 'status' }
+    // A catalog key on a column: the label must follow a runtime switch.
+    { key: 'name', label: { key: 'common.record' }, sortable: true },
+    { key: 'basePrice', label: { text: 'Precio' }, type: 'money', currencyKey: 'currencyCode' },
+    { key: 'status', label: { text: 'Estado' }, type: 'status' }
   ];
   fields: FieldConfig[] = [
-    { key: 'name', label: 'Nombre', type: 'text', required: true },
-    { key: 'basePrice', label: 'Precio', type: 'number', required: true, min: 0 }
+    { key: 'name', label: { key: 'common.record' }, type: 'text', required: true },
+    { key: 'basePrice', label: { text: 'Precio' }, type: 'number', required: true, min: 0 }
   ];
+  rowActions: RowAction[] = [
+    // Dynamic business data must render verbatim.
+    { label: { text: 'Listas autorizadas' }, run: () => undefined }
+  ];
+  crudMessages: CrudMessages = {};
 }
 
 describe('CrudPageComponent', () => {
@@ -57,13 +67,26 @@ describe('CrudPageComponent', () => {
   let fake: FakeResource;
   let page: CrudPageComponent;
   let toast: ToastService;
+  let language: LanguageService;
 
   beforeEach(async () => {
-    await TestBed.configureTestingModule({ imports: [HostComponent] }).compileComponents();
+    window.localStorage.clear();
+    await TestBed.configureTestingModule({
+      imports: [HostComponent, provideTranslocoTesting()]
+    }).compileComponents();
+
+    installTestTranslations();
+    language = TestBed.inject(LanguageService);
+
     fixture = TestBed.createComponent(HostComponent);
     fake = fixture.componentInstance.service as unknown as FakeResource;
     toast = TestBed.inject(ToastService);
     toast.clear();
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+    TestBed.resetTestingModule();
   });
 
   function create(): void {
@@ -73,6 +96,11 @@ describe('CrudPageComponent', () => {
 
   function text(): string {
     return fixture.nativeElement.textContent as string;
+  }
+
+  function click(testId: string): void {
+    fixture.debugElement.query(By.css(`[data-testid="${testId}"]`)).nativeElement.click();
+    fixture.detectChanges();
   }
 
   it('renders the header and the loaded rows', () => {
@@ -87,6 +115,73 @@ describe('CrudPageComponent', () => {
     );
   });
 
+  // --- Phase 3: translated chrome ------------------------------------------
+
+  it('translates the CRUD chrome instead of hard-coding it', () => {
+    create();
+
+    expect(text()).toContain('Actualizar');
+    expect(text()).toContain('Acciones');
+    expect(text()).toContain('Editar');
+    expect(text()).toContain('Eliminar');
+    expect(text()).toContain('Todos');
+    expect(text()).toContain('Activos');
+    expect(text()).toContain('Inactivos');
+    expect(text()).toContain('Anterior');
+    expect(text()).toContain('Siguiente');
+    expect(text()).toContain('Página 1 de 1 · 1 registros');
+    // The search placeholder is a translated attribute, not literal copy.
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="search-input"]').getAttribute('placeholder')
+    ).toBe('Buscar…');
+  });
+
+  it('renders catalog keys and literals side by side', () => {
+    create();
+
+    // `{ key }` resolves to the catalog, `string` is still a transitional literal.
+    expect(text()).toContain('registro');
+    expect(text()).toContain('Precio');
+  });
+
+  it('keeps dynamic API labels verbatim', () => {
+    create();
+
+    expect(text()).toContain('Listas autorizadas');
+  });
+
+  it('rerenders the whole chrome on a runtime language switch', () => {
+    create();
+    expect(text()).toContain('Actualizar');
+
+    language.setLocale('en-US');
+    fixture.detectChanges();
+
+    expect(text()).toContain('Refresh');
+    expect(text()).toContain('Actions');
+    expect(text()).toContain('Edit');
+    expect(text()).toContain('Delete');
+    expect(text()).toContain('All');
+    expect(text()).toContain('Page 1 of 1 · 1 records');
+    // Column keys and dynamic data both follow/keep their language correctly.
+    expect(text()).toContain('record');
+    expect(text()).toContain('Listas autorizadas');
+    expect(fixture.nativeElement.querySelector('[data-testid="search-input"]').getAttribute('placeholder')).toBe(
+      'Search…'
+    );
+  });
+
+  it('detects an untranslated key leaking into the UI', () => {
+    create();
+
+    // A raw key would render as `common.actions`; the catalog coverage test
+    // catches it, and this guards the rendered output too.
+    expect(text()).not.toMatch(/common\.[a-zA-Z]/);
+    expect(text()).not.toMatch(/crud\.[a-zA-Z]/);
+  });
+
+  // --- states --------------------------------------------------------------
+
   it('shows the loading state while the request is in flight', () => {
     const subject = new Subject<any>();
     fake.list.and.returnValue(subject);
@@ -94,6 +189,7 @@ describe('CrudPageComponent', () => {
     create();
 
     expect(fixture.nativeElement.querySelector('[data-state="loading"]')).toBeTruthy();
+    expect(text()).toContain('Cargando…');
 
     subject.next({
       data: [{ id: 'p1', name: 'Cafetera', basePrice: 100, currencyCode: 'MXN', status: 'active' }],
@@ -111,6 +207,8 @@ describe('CrudPageComponent', () => {
     create();
 
     expect(fixture.nativeElement.querySelector('[data-state="empty"]')).toBeTruthy();
+    expect(text()).toContain('Sin resultados');
+    expect(text()).toContain('Aún no hay registros');
   });
 
   it('shows the error state and retries', () => {
@@ -128,37 +226,93 @@ describe('CrudPageComponent', () => {
     expect(fake.list).toHaveBeenCalledTimes(2);
   });
 
+  // --- create / edit / delete ---------------------------------------------
+
   it('creates a record through the modal form', () => {
     create();
+    click('create-button');
 
-    fixture.debugElement.query(By.css('[data-testid="create-button"]')).nativeElement.click();
-    fixture.detectChanges();
-
-    expect(text()).toContain('Nuevo producto');
+    // One complete translated sentence, not `Nuevo ` + entity.
+    expect(text()).toContain('Añadir producto');
 
     page.form.patchValue({ name: 'Tostadora', basePrice: 50 });
-    fixture.debugElement.query(By.css('[data-testid="submit-button"]')).nativeElement.click();
+    click('submit-button');
 
     expect(fake.create).toHaveBeenCalledWith({ name: 'Tostadora', basePrice: 50 });
-    expect(toast.toasts().some((item) => item.kind === 'success')).toBe(true);
+    // The toast is also a complete sentence with the entity interpolated.
+    const success = toast.toasts().find((item) => item.kind === 'success');
+    expect(success?.message).toBe('Se añadió producto correctamente.');
+  });
+
+  it('uses complete sentences for the create and edit toasts', () => {
+    create();
+
+    click('create-button');
+    page.form.patchValue({ name: 'X', basePrice: 1 });
+    page.submit();
+    expect(toast.toasts().some((item) => item.message === 'Se añadió producto correctamente.')).toBe(true);
+
+    toast.clear();
+    click('edit-button');
+    page.form.patchValue({ name: 'Y' });
+    page.submit();
+    expect(toast.toasts().some((item) => item.message === 'Se actualizó producto correctamente.')).toBe(true);
   });
 
   it('blocks submission while the form is invalid', () => {
     create();
-
-    fixture.debugElement.query(By.css('[data-testid="create-button"]')).nativeElement.click();
-    fixture.detectChanges();
-
-    fixture.debugElement.query(By.css('[data-testid="submit-button"]')).nativeElement.click();
+    click('create-button');
+    click('submit-button');
 
     expect(fake.create).not.toHaveBeenCalled();
+  });
+
+  it('shows the localized invalid-form message', () => {
+    create();
+    click('create-button');
+
+    // Cross-field/root failure path: the whole-form message is translated.
+    expect(page.invalidFormMessage()).toBe('Revisa los campos marcados.');
+
+    language.setLocale('en-US');
+    expect(page.invalidFormMessage()).toBe('Please review the highlighted fields.');
+  });
+
+  it('lets a page replace a chrome message with its own whole sentence', () => {
+    // The host supplies complete sentences; nothing is concatenated. They are
+    // literals here only because the page owns that copy.
+    fixture.componentInstance.crudMessages = {
+      create: { text: 'Dar de alta un producto' },
+      created: { text: 'Producto dado de alta.' },
+      deleteMessage: { text: 'Vas a dar de baja el producto seleccionado.' }
+    };
+    create();
+
+    expect(page.createLabel()).toBe('Dar de alta un producto');
+    expect(page.modalTitle()).toBe('Dar de alta un producto');
+    expect(page.deleteMessage()).toBe('Vas a dar de baja el producto seleccionado.');
+
+    click('create-button');
+    page.form.patchValue({ name: 'X', basePrice: 1 });
+    page.submit();
+    expect(toast.toasts().some((item) => item.message === 'Producto dado de alta.')).toBe(true);
+  });
+
+  it('keeps the entity interpolation in the default messages', () => {
+    create();
+
+    expect(page.entity()).toBe('producto');
+    expect(page.createLabel()).toBe('Añadir producto');
+    expect(page.editLabel()).toBe('Editar producto');
+
+    language.setLocale('en-US');
+    expect(page.createLabel()).toBe('Add producto');
   });
 
   it('opens the edit modal prefilled and updates the record', () => {
     create();
 
-    fixture.debugElement.query(By.css('[data-testid="edit-button"]')).nativeElement.click();
-    fixture.detectChanges();
+    click('edit-button');
 
     expect(text()).toContain('Editar producto');
     expect(page.form.get('name')?.value).toBe('Cafetera');
@@ -172,35 +326,61 @@ describe('CrudPageComponent', () => {
   it('confirms and performs a soft delete', () => {
     create();
 
-    fixture.debugElement.query(By.css('[data-testid="delete-button"]')).nativeElement.click();
-    fixture.detectChanges();
+    click('delete-button');
     expect(text()).toContain('Confirmar eliminación');
+    expect(text()).toContain('¿Seguro que deseas eliminar producto?');
 
-    fixture.debugElement.query(By.css('[data-testid="confirm-delete-button"]')).nativeElement.click();
+    click('confirm-delete-button');
 
     expect(fake.remove).toHaveBeenCalledWith('p1');
+    expect(toast.toasts().some((item) => item.message === 'Se eliminó producto correctamente.')).toBe(true);
   });
 
   it('reports a failed delete through a toast', () => {
     fake.remove.and.returnValue(throwError(() => ({ error: { message: 'No permitido' } })));
 
     create();
-    fixture.debugElement.query(By.css('[data-testid="delete-button"]')).nativeElement.click();
-    fixture.detectChanges();
-    fixture.debugElement.query(By.css('[data-testid="confirm-delete-button"]')).nativeElement.click();
+    click('delete-button');
+    click('confirm-delete-button');
 
     expect(toast.toasts().some((item) => item.kind === 'error')).toBe(true);
   });
 
-  it('surfaces API field errors in the form', () => {
+  it('localizes a server field error by its stable code', () => {
     fake.create.and.returnValue(
-      throwError(() => ({ error: { message: 'Invalid input', details: [{ field: 'name', message: 'Requerido' }] } }))
+      throwError(() => ({
+        error: {
+          statusCode: 422,
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid input',
+          details: [
+            { field: 'name', code: 'UNSUPPORTED_VALUE', message: 'must be one of: a, b', params: { allowed: ['a', 'b'] } }
+          ]
+        }
+      }))
     );
 
     create();
-    fixture.debugElement.query(By.css('[data-testid="create-button"]')).nativeElement.click();
+    click('create-button');
+    page.form.patchValue({ name: 'X', basePrice: 1 });
+    page.submit();
     fixture.detectChanges();
 
+    // The code wins over the English API prose.
+    expect(text()).toContain('Valor no admitido');
+    expect(text()).toContain('a, b');
+    expect(text()).not.toContain('must be one of');
+  });
+
+  it('surfaces an unmapped API field error verbatim', () => {
+    fake.create.and.returnValue(
+      throwError(() => ({
+        error: { message: 'Invalid input', details: [{ field: 'name', message: 'Requerido' }] }
+      }))
+    );
+
+    create();
+    click('create-button');
     page.form.patchValue({ name: 'X', basePrice: 1 });
     page.submit();
     fixture.detectChanges();
@@ -208,6 +388,8 @@ describe('CrudPageComponent', () => {
     expect(text()).toContain('Invalid input');
     expect(text()).toContain('Requerido');
   });
+
+  // --- toolbar -------------------------------------------------------------
 
   it('debounces the search box and reloads with the term', fakeAsync(() => {
     create();
@@ -262,8 +444,7 @@ describe('CrudPageComponent', () => {
 
   it('closes the modal on cancel', () => {
     create();
-    fixture.debugElement.query(By.css('[data-testid="create-button"]')).nativeElement.click();
-    fixture.detectChanges();
+    click('create-button');
 
     page.closeModal();
     fixture.detectChanges();
@@ -275,6 +456,6 @@ describe('CrudPageComponent', () => {
     create();
 
     expect(page.visibleFields().length).toBe(2);
-    expect(page.visibleRowActions({ id: 'p1' })).toEqual([]);
+    expect(page.visibleRowActions({ id: 'p1' }).length).toBe(1);
   });
 });

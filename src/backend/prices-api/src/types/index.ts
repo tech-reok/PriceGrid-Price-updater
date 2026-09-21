@@ -1,5 +1,6 @@
 import type { Request } from 'express';
 import type { ActorType } from '@prisma/client';
+import type { SupportedLocale } from '../common/i18n/supported-locales';
 
 /** Who performed a write operation (audit fields). */
 export interface ActorContext {
@@ -9,7 +10,13 @@ export interface ActorContext {
 
 export const SYSTEM_ACTOR: ActorContext = { id: null, type: 'system' };
 
-/** Authenticated dashboard user resolved from the JWT access token. */
+/**
+ * Authenticated dashboard user resolved from the JWT access token.
+ *
+ * `preferredLocale` is presentation state, not authorization data: it is
+ * returned by login/refresh/me and deliberately NOT signed into the JWT, so the
+ * middleware always reads the current value from the database.
+ */
 export interface AuthUser {
   id: string;
   email: string;
@@ -19,6 +26,7 @@ export interface AuthUser {
   tenantId: string | null;
   isGlobalAdmin: boolean;
   permissions: string[];
+  preferredLocale: SupportedLocale;
 }
 
 /** API key resolved from the X-API-Key header (external API). */

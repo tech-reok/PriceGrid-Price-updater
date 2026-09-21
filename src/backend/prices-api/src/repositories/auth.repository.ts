@@ -6,6 +6,8 @@ export interface UserWithRole {
   passwordHash: string;
   roleId: string;
   status: string;
+  /** Raw column value; mapped through `normalizeStoredLocale` when read. */
+  preferredLocale?: string | null;
   deletedAt: Date | null;
   role: {
     id: string;
@@ -34,11 +36,18 @@ export interface CreateRefreshTokenInput {
   ip?: string | null;
 }
 
+/** Self-service locale write. The user id always comes from the access token. */
+export interface UpdateUserPreferencesInput {
+  userId: string;
+  preferredLocale: string;
+}
+
 export interface IAuthRepository {
   findUserByEmail(email: string): Promise<UserWithRole | null>;
   findUserById(id: string): Promise<UserWithRole | null>;
   findPermissionsByRoleId(roleId: string): Promise<string[]>;
   touchLastLogin(userId: string): Promise<void>;
+  updateUserPreferences(input: UpdateUserPreferencesInput): Promise<UserWithRole | null>;
   createRefreshToken(input: CreateRefreshTokenInput): Promise<RefreshTokenRow>;
   findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenRow | null>;
   revokeRefreshToken(id: string, replacedById?: string | null): Promise<void>;
@@ -79,6 +88,31 @@ export class PrismaAuthRepository implements IAuthRepository {
     await this.prisma.user.update({
       where: { id: userId },
       data: { lastLoginAt: new Date() }
+    });
+  }
+
+  /**
+   * Writes the locale of a single user. The id is never taken from the client
+   * payload, and the record is re-read with the role/tenant relations so the
+   * caller can build a complete `AuthUser`.
+   *
+   * Deliberately does not touch refresh tokens: changing the UI language must
+   * not revoke or rotate the session.
+   */
+  async updateUserPreferences(input: UpdateUserPreferencesInput): Promise<UserWithRole | null> {
+    const existing = await this.prisma.user.findFirst({
+      where: { id: input.userId, deletedAt: null }
+    });
+    if (!existing) return null;
+
+    return this.prisma.user.update({
+      where: { id: input.userId },
+      data: {
+        preferredLocale: input.preferredLocale,
+        updatedBy: input.userId,
+        updatedByType: 'user'
+      },
+      include: userInclude
     });
   }
 

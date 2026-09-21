@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AppError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from '../../src/common/errors';
 import { requestId } from '../../src/middlewares/request-id';
-import { validate } from '../../src/middlewares/validate';
+import { localizedIssue, validate, zodDetails } from '../../src/middlewares/validate';
 import { errorHandler, notFoundHandler } from '../../src/middlewares/error-handler';
 import {
   createJwtAuthMiddleware,
@@ -24,6 +24,7 @@ function user(overrides: Partial<AuthUser> = {}): AuthUser {
     tenantId: 'tenant-1',
     isGlobalAdmin: false,
     permissions: ['products:read'],
+    preferredLocale: 'es-419',
     ...overrides
   };
 }
@@ -74,6 +75,87 @@ describe('validate middleware', () => {
 
     expect(error).toBeUndefined();
     expect((req as any).validatedQuery).toEqual({ page: 2 });
+  });
+});
+
+describe('localizable validation details', () => {
+  it('exposes a stable code and parameters for a bound violation', () => {
+    const parsed = z.object({ name: z.string().min(3) }).safeParse({ name: 'ab' });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+
+    const [detail] = zodDetails(parsed.error);
+    expect(detail).toMatchObject({
+      field: 'name',
+      code: 'TOO_SMALL',
+      params: { minimum: 3, inclusive: true, kind: 'string' }
+    });
+    // The technical fallback message is preserved for non-UI consumers.
+    expect(typeof detail.message).toBe('string');
+    expect(detail.message.length).toBeGreaterThan(0);
+  });
+
+  it('exposes a stable code for an unsupported enum value, with the allowlist', () => {
+    const parsed = z.enum(['es-419', 'en-US']).safeParse('es-MX');
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+
+    expect(zodDetails(parsed.error)[0]).toMatchObject({
+      code: 'UNSUPPORTED_VALUE',
+      params: { allowed: ['es-419', 'en-US'], received: 'es-MX' }
+    });
+  });
+
+  it('exposes the rejected keys for an unknown field', () => {
+    const parsed = z.object({ a: z.string() }).strict().safeParse({ a: 'x', tenantId: 't1' });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+
+    expect(zodDetails(parsed.error)[0]).toMatchObject({
+      code: 'UNKNOWN_FIELD',
+      params: { keys: ['tenantId'] }
+    });
+  });
+
+  it('lets a refinement publish its own domain code and parameters', () => {
+    const schema = z
+      .object({ preferredLocale: z.string() })
+      .superRefine((value, ctx) => {
+        if (value.preferredLocale !== 'en-US') {
+          localizedIssue(ctx, {
+            path: ['preferredLocale'],
+            code: 'UNSUPPORTED_LOCALE',
+            message: 'must be one of: es-419, en-US',
+            params: { allowed: ['es-419', 'en-US'] }
+          });
+        }
+      });
+
+    const parsed = schema.safeParse({ preferredLocale: 'es-MX' });
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+
+    const [detail] = zodDetails(parsed.error);
+    // The domain code wins over the generic INVALID_VALUE...
+    expect(detail.code).toBe('UNSUPPORTED_LOCALE');
+    // ...and no longer leaks the internal `code` key as a parameter.
+    expect(detail.params).toEqual({ allowed: ['es-419', 'en-US'] });
+    expect(detail.field).toBe('preferredLocale');
+  });
+
+  it('keeps the code and the trace id in the HTTP envelope', async () => {
+    const req = mockRequest({ body: { name: '' } });
+    req.requestId = 'trace-locale';
+    const error = await runHandler(validate(z.object({ name: z.string().min(1) })), req, mockResponse());
+
+    const res = mockResponse();
+    errorHandler(error, req, res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(422);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+    expect(res.body.traceId).toBe('trace-locale');
+    expect(res.body.details[0]).toMatchObject({ field: 'name', code: 'TOO_SMALL' });
+    expect(typeof res.body.details[0].message).toBe('string');
   });
 });
 

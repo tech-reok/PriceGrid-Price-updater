@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { env } from '../config/env';
 import { TOKENS } from '../di/tokens';
 import { NotFoundError, ValidationError } from '../common/errors';
+import { DEFAULT_LOCALE } from '../common/i18n/supported-locales';
 import { serializeCatalogExport, type ExportFormat } from './export.serializers';
 import type { PriceCatalogService } from './price-catalog.service';
 import type { ActorContext, AuthUser } from '../types';
@@ -94,7 +95,10 @@ export class ExportService {
         roleSlug: 'worker',
         tenantId: job.tenantId,
         isGlobalAdmin: true,
-        permissions: ['price-catalog:read-all']
+        permissions: ['price-catalog:read-all'],
+        // The export worker has no interactive user; exports are not localized
+        // in this phase, so the default locale is only a contract placeholder.
+        preferredLocale: DEFAULT_LOCALE
       };
       const rows: any[] = [];
       let page = 1;
