@@ -3,8 +3,7 @@ import { CrudPageComponent } from '../../shared/crud-page.component';
 import { CurrencyService } from '../../core/services/catalog.services';
 import { TenantService } from '../../core/services/access.services';
 import { SessionStore } from '../../core/services/session.store';
-import { currencyOptionLoader, staticOptions } from '../../core/utils/options';
-import { listTimeZoneOptions } from '../../core/utils/time-zones';
+import { currencyOptionLoader, recordStatusOptions, timeZoneOptions } from '../../core/utils/options';
 import type { ColumnConfig, FieldConfig } from '../../shared/crud-page.types';
 
 /** Companies (tenants). Visible and manageable only by the global admin. */
@@ -14,11 +13,11 @@ import type { ColumnConfig, FieldConfig } from '../../shared/crud-page.types';
   imports: [CrudPageComponent],
   template: `
     <app-crud-page
-      title="Empresas"
-      subtitle="Administración global de empresas. Selecciona la empresa activa desde el encabezado."
-      entityLabel="empresa"
-      searchPlaceholder="Buscar por nombre o slug…"
-      emptyMessage="Crea la primera empresa para empezar a operar."
+      [title]="{ key: 'companies.title' }"
+      [subtitle]="{ key: 'companies.subtitle' }"
+      [entityLabel]="{ key: 'companies.entity' }"
+      [searchPlaceholder]="{ key: 'companies.searchPlaceholder' }"
+      [emptyMessage]="{ key: 'companies.emptyMessage' }"
       [columns]="columns"
       [fields]="fields"
       [service]="service"
@@ -35,39 +34,49 @@ export class CompaniesComponent {
   private readonly session = inject(SessionStore);
 
   readonly columns: ColumnConfig[] = [
-    { key: 'commercialName', label: 'Nombre comercial', sortable: true },
-    { key: 'legalName', label: 'Razón social' },
-    { key: 'slug', label: 'Slug' },
-    { key: 'defaultCurrency', label: 'Moneda' },
-    { key: 'timeZone', label: 'Zona horaria' },
-    { key: 'status', label: 'Estado', type: 'status' }
+    { key: 'commercialName', label: { key: 'companies.columns.commercialName' }, sortable: true },
+    { key: 'legalName', label: { key: 'companies.columns.legalName' } },
+    { key: 'slug', label: { key: 'common.slug' } },
+    { key: 'defaultCurrency', label: { key: 'common.currency' } },
+    { key: 'timeZone', label: { key: 'companies.fields.timeZone' } },
+    { key: 'status', label: { key: 'common.status' }, type: 'status' }
   ];
 
   readonly fields: FieldConfig[] = [
-    { key: 'commercialName', label: 'Nombre comercial', type: 'text', required: true },
-    { key: 'legalName', label: 'Razón social', type: 'text', required: true },
-    { key: 'slug', label: 'Slug', type: 'text', required: true, placeholder: 'mi-empresa', help: 'Minúsculas y guiones.' },
-    { key: 'defaultCurrency', label: 'Moneda por defecto', type: 'select', required: true, optionsKey: 'currencies' },
+    { key: 'commercialName', label: { key: 'companies.columns.commercialName' }, type: 'text', required: true },
+    { key: 'legalName', label: { key: 'companies.columns.legalName' }, type: 'text', required: true },
     {
-      key: 'timeZone',
-      label: 'Zona horaria',
+      key: 'slug',
+      label: { key: 'common.slug' },
+      type: 'text',
+      required: true,
+      placeholder: { key: 'companies.fields.slugPlaceholder' },
+      help: { key: 'companies.fields.slugHelp' }
+    },
+    {
+      key: 'defaultCurrency',
+      label: { key: 'companies.fields.defaultCurrency' },
       type: 'select',
       required: true,
-      options: listTimeZoneOptions(),
+      optionsKey: 'currencies'
+    },
+    {
+      key: 'timeZone',
+      label: { key: 'companies.fields.timeZone' },
+      type: 'select',
+      required: true,
+      options: timeZoneOptions(),
       defaultValue: 'UTC'
     },
     {
       key: 'status',
-      label: 'Estado',
+      label: { key: 'common.status' },
       type: 'select',
       required: true,
       defaultValue: 'active',
-      options: staticOptions([
-        ['active', 'Activo'],
-        ['inactive', 'Inactivo']
-      ])
+      options: recordStatusOptions()
     },
-    { key: 'notes', label: 'Notas', type: 'textarea', full: true }
+    { key: 'notes', label: { key: 'common.notes' }, type: 'textarea', full: true }
   ];
 
   readonly selectSources = {

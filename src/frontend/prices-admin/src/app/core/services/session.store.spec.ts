@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { SessionStore } from './session.store';
+import { LanguageService, UI_LOCALE_STORAGE_KEY } from '../i18n/language.service';
+import { installTestTranslations, provideTranslocoTesting } from '../../testing';
 import type { AuthUser } from '../models';
 
 function user(overrides: Partial<AuthUser> = {}): AuthUser {
@@ -12,17 +14,27 @@ function user(overrides: Partial<AuthUser> = {}): AuthUser {
     tenantId: 'tenant-1',
     isGlobalAdmin: false,
     permissions: ['products:read'],
+    preferredLocale: 'es-419',
     ...overrides
   };
 }
 
 describe('SessionStore', () => {
   let store: SessionStore;
+  let language: LanguageService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    window.localStorage.clear();
+    TestBed.configureTestingModule({ imports: [provideTranslocoTesting()] });
+    installTestTranslations();
     store = TestBed.inject(SessionStore);
+    language = TestBed.inject(LanguageService);
     store.clear();
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+    TestBed.resetTestingModule();
   });
 
   it('starts empty', () => {
@@ -96,5 +108,50 @@ describe('SessionStore', () => {
     expect(store.isAuthenticated()).toBe(false);
     expect(store.user()).toBeNull();
     expect(store.activeTenantId()).toBeNull();
+  });
+
+  // --- locale synchronisation ---------------------------------------------
+
+  it('applies the authenticated locale on setSession', () => {
+    store.setSession('token-1', user({ preferredLocale: 'en-US' }));
+
+    expect(language.activeLocale()).toBe('en-US');
+  });
+
+  it('applies the locale on patchUser', () => {
+    store.setSession('token-1', user({ preferredLocale: 'es-419' }));
+    expect(language.activeLocale()).toBe('es-419');
+
+    store.patchUser(user({ preferredLocale: 'en-US' }));
+
+    expect(language.activeLocale()).toBe('en-US');
+    expect(store.user()?.preferredLocale).toBe('en-US');
+  });
+
+  it('falls back to the default when the API sends an unknown locale', () => {
+    store.setSession('token-1', user({ preferredLocale: 'es-MX' as never }));
+
+    expect(language.activeLocale()).toBe('es-419');
+  });
+
+  it('never changes the locale when the tenant is switched', () => {
+    store.setSession('token-1', user({ isGlobalAdmin: true, tenantId: null, preferredLocale: 'en-US' }));
+
+    store.selectTenant('tenant-42');
+    store.selectTenant('tenant-7');
+    store.selectTenant(null);
+
+    expect(language.activeLocale()).toBe('en-US');
+  });
+
+  it('keeps the guest locale on clear but drops the authenticated state', () => {
+    store.setSession('token-1', user({ preferredLocale: 'en-US' }));
+    store.clear();
+
+    // The stored preference survives so the login page stays localized.
+    expect(window.localStorage.getItem(UI_LOCALE_STORAGE_KEY)).toBe('en-US');
+    expect(language.activeLocale()).toBe('en-US');
+    expect(store.user()).toBeNull();
+    expect(store.isAuthenticated()).toBe(false);
   });
 });

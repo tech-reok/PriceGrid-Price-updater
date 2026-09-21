@@ -9,8 +9,10 @@ import {
 } from '../../core/services/catalog.services';
 import { PriceService } from '../../core/services/price.service';
 import { SessionStore } from '../../core/services/session.store';
-import { currencyOptionLoader, idOptionLoader, staticOptions } from '../../core/utils/options';
-import { formatMoney, toDateOnlyInputValue } from '../../core/utils/format';
+import { currencyOptionLoader, idOptionLoader, recordStatusOptions } from '../../core/utils/options';
+import { toDateOnlyInputValue } from '../../core/utils/format';
+import { LocaleFormattingService } from '../../core/i18n/locale-formatting.service';
+import { DisplayTextService } from '../../core/i18n/display-text.service';
 import type {
   ColumnConfig,
   FieldConfig,
@@ -25,17 +27,17 @@ import type {
   imports: [CrudPageComponent],
   template: `
     <app-crud-page
-      title="Precios"
-      subtitle="Precio por producto, lista y marketplace, con cálculo de precio final."
-      entityLabel="precio"
-      searchPlaceholder="Buscar por notas…"
-      emptyMessage="Registra el primer precio para ver el cálculo del descuento aplicable."
+      [title]="{ key: 'prices.title' }"
+      [subtitle]="{ key: 'prices.subtitle' }"
+      [entityLabel]="{ key: 'prices.entity' }"
+      [searchPlaceholder]="{ key: 'prices.searchPlaceholder' }"
+      [emptyMessage]="{ key: 'prices.emptyMessage' }"
       [columns]="columns"
       [fields]="fields"
       [service]="service"
       [selectSources]="selectSources"
       [previewRunner]="previewRunner"
-      previewLabel="Calcular precio final"
+      [previewLabel]="{ key: 'prices.preview.label' }"
       [mapToForm]="mapToForm"
       [mapToPayload]="mapToPayload"
       [canCreate]="can('prices:create')"
@@ -51,37 +53,41 @@ export class PricesComponent {
   private readonly marketplaceService = inject(MarketplaceService);
   private readonly currencyService = inject(CurrencyService);
   private readonly session = inject(SessionStore);
+  private readonly formatting = inject(LocaleFormattingService);
+  private readonly text = inject(DisplayTextService);
 
   readonly columns: ColumnConfig[] = [
-    { key: 'product.name', label: 'Producto', sortable: false },
-    { key: 'priceList.name', label: 'Lista' },
-    { key: 'marketplace.name', label: 'Marketplace' },
-    { key: 'basePrice', label: 'Precio base', type: 'money', currencyKey: 'currencyCode', align: 'right' },
-    { key: 'finalPrice', label: 'Precio final', type: 'money', currencyKey: 'currencyCode', align: 'right' },
-    { key: 'startDate', label: 'Vigente desde', type: 'date', dateOnly: true },
-    { key: 'status', label: 'Estado', type: 'status' }
+    { key: 'product.name', label: { key: 'common.product' }, sortable: false },
+    { key: 'priceList.name', label: { key: 'prices.columns.list' } },
+    { key: 'marketplace.name', label: { key: 'common.marketplace' } },
+    { key: 'basePrice', label: { key: 'common.basePrice' }, type: 'money', currencyKey: 'currencyCode', align: 'right' },
+    { key: 'finalPrice', label: { key: 'common.finalPrice' }, type: 'money', currencyKey: 'currencyCode', align: 'right' },
+    { key: 'startDate', label: { key: 'prices.columns.validFrom' }, type: 'date', dateOnly: true },
+    { key: 'status', label: { key: 'common.status' }, type: 'status' }
   ];
 
   readonly fields: FieldConfig[] = [
-    { key: 'productId', label: 'Producto', type: 'select', required: true, optionsKey: 'products' },
-    { key: 'priceListId', label: 'Lista de precios', type: 'select', required: true, optionsKey: 'priceLists' },
-    { key: 'marketplaceId', label: 'Marketplace', type: 'select', required: true, optionsKey: 'marketplaces' },
-    { key: 'basePrice', label: 'Precio base', type: 'number', required: true, min: 0, step: 0.01 },
-    { key: 'currencyCode', label: 'Moneda', type: 'select', required: true, optionsKey: 'currencies' },
-    { key: 'startDate', label: 'Fecha de inicio', type: 'date', required: true },
-    { key: 'endDate', label: 'Fecha de fin', type: 'date', help: 'Opcional: sin fecha fin el precio es indefinido.' },
+    { key: 'productId', label: { key: 'common.product' }, type: 'select', required: true, optionsKey: 'products' },
+    { key: 'priceListId', label: { key: 'prices.fields.list' }, type: 'select', required: true, optionsKey: 'priceLists' },
+    { key: 'marketplaceId', label: { key: 'common.marketplace' }, type: 'select', required: true, optionsKey: 'marketplaces' },
+    { key: 'basePrice', label: { key: 'common.basePrice' }, type: 'number', required: true, min: 0, step: 0.01 },
+    { key: 'currencyCode', label: { key: 'common.currency' }, type: 'select', required: true, optionsKey: 'currencies' },
+    { key: 'startDate', label: { key: 'common.startDate' }, type: 'date', required: true },
+    {
+      key: 'endDate',
+      label: { key: 'common.endDate' },
+      type: 'date',
+      help: { key: 'prices.fields.endDateHelp' }
+    },
     {
       key: 'status',
-      label: 'Estado',
+      label: { key: 'common.status' },
       type: 'select',
       required: true,
       defaultValue: 'active',
-      options: staticOptions([
-        ['active', 'Activo'],
-        ['inactive', 'Inactivo']
-      ])
+      options: recordStatusOptions()
     },
-    { key: 'notes', label: 'Notas', type: 'textarea', full: true }
+    { key: 'notes', label: { key: 'common.notes' }, type: 'textarea', full: true }
   ];
 
   readonly selectSources = {
@@ -90,7 +96,8 @@ export class PricesComponent {
         map((response) =>
           response.data.map((product) => ({
             value: product.id,
-            label: `${product.sku} — ${product.name}`
+            // SKU and name are business data: shown exactly as entered.
+            label: { text: `${product.sku} — ${product.name}` }
           }))
         )
       ),
@@ -146,20 +153,43 @@ export class PricesComponent {
       })
       .pipe(
         map((result): PreviewResult[] => [
-          { label: 'Precio base', value: formatMoney(result.basePrice, currencyCode) },
           {
-            label: 'Descuento aplicado',
-            value: result.appliedDiscount ? result.appliedDiscount.name : 'Ninguno',
-            hint: result.appliedDiscount
-              ? `${result.scope} · ${formatMoney(result.discountAmount, currencyCode)}`
-              : 'Se usa el precio base'
+            label: { key: 'prices.preview.basePrice' },
+            value: { text: this.formatting.formatMoney(result.basePrice, currencyCode) }
           },
-          { label: 'Precio final', value: formatMoney(result.finalPrice, currencyCode) }
+          {
+            label: { key: 'prices.preview.discount' },
+            // The discount name is business data; the "none" case is copy.
+            value: result.appliedDiscount
+              ? { text: result.appliedDiscount.name }
+              : { key: 'prices.preview.none' },
+            hint: result.appliedDiscount
+              ? {
+                  key: 'prices.preview.discountHint',
+                  params: {
+                    scope: this.scopeLabel(result.scope),
+                    amount: this.formatting.formatMoney(result.discountAmount, currencyCode)
+                  }
+                }
+              : { key: 'prices.preview.basePriceUsed' }
+          },
+          {
+            label: { key: 'prices.preview.finalPrice' },
+            value: { text: this.formatting.formatMoney(result.finalPrice, currencyCode) }
+          }
         ])
       );
   };
 
   can(permission: string): boolean {
     return this.session.hasPermission(permission);
+  }
+
+  // --- internals -----------------------------------------------------------
+
+  /** Translates a discount scope code, keeping the raw code as the fallback. */
+  private scopeLabel(scope: string): string {
+    const key = `discountScope.${scope}`;
+    return this.text.has(key) ? this.text.translate(key) : scope;
   }
 }

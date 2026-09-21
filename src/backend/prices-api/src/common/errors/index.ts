@@ -3,9 +3,18 @@
  * error-handler middleware maps them to the HTTP error envelope.
  */
 
+/**
+ * Machine-readable field detail.
+ *
+ * `code` and `params` exist so the frontend can localize the message instead of
+ * rendering the English prose in `message`. `message` is kept as the technical
+ * fallback for non-UI consumers and for codes the frontend does not know yet.
+ */
 export interface ErrorDetail {
   field?: string;
+  code?: string;
   message: string;
+  params?: Record<string, unknown>;
 }
 
 export class AppError extends Error {

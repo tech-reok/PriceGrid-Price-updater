@@ -22,6 +22,7 @@ function build() {
         passwordHash: 'hash',
         roleId: 'role-1',
         status: 'active',
+        preferredLocale: 'es-419',
         deletedAt: null
       },
       {
@@ -32,7 +33,19 @@ function build() {
         passwordHash: 'hash',
         roleId: 'role-1',
         status: 'inactive',
+        preferredLocale: 'en-US',
         deletedAt: new Date('2024-01-01')
+      },
+      {
+        // Simulates a legacy row written before the column existed.
+        id: 'user-3',
+        tenantId: 'tenant-1',
+        name: 'Legacy',
+        email: 'legacy@example.com',
+        passwordHash: 'hash',
+        roleId: 'role-1',
+        status: 'active',
+        deletedAt: null
       }
     ],
     refreshToken: []
@@ -57,6 +70,67 @@ describe('PrismaAuthRepository', () => {
     const { repository } = build();
     await expect(repository.findUserById('user-1')).resolves.toMatchObject({ id: 'user-1' });
     await expect(repository.findUserById('missing')).resolves.toBeNull();
+  });
+
+  it('reads the stored preferred locale, including a legacy row with no value', async () => {
+    const { repository } = build();
+
+    expect((await repository.findUserById('user-1'))?.preferredLocale).toBe('es-419');
+    // A row written before the column existed has no value at all; the service
+    // layer is responsible for defaulting it.
+    expect((await repository.findUserById('user-3'))?.preferredLocale).toBeUndefined();
+  });
+
+  it('updates only the requested user locale, writing the audit columns', async () => {
+    const { prisma, repository } = build();
+
+    const updated = await repository.updateUserPreferences({
+      userId: 'user-1',
+      preferredLocale: 'en-US'
+    });
+
+    // The returned row is re-read with role/tenant so a full AuthUser can be built.
+    expect(updated).toMatchObject({
+      id: 'user-1',
+      preferredLocale: 'en-US',
+      updatedBy: 'user-1',
+      updatedByType: 'user'
+    });
+    expect(updated?.role.slug).toBe('tenant_admin');
+    expect(updated?.tenant?.commercialName).toBe('Demo Company');
+
+    // Only the target row changed.
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-1').preferredLocale).toBe('en-US');
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-2').preferredLocale).toBe('en-US');
+    expect(prisma.__store.user.find((row: any) => row.id === 'user-3').preferredLocale).toBeUndefined();
+  });
+
+  it('leaves refresh tokens alone when the locale changes', async () => {
+    const { prisma, repository } = build();
+    await repository.createRefreshToken({
+      userId: 'user-1',
+      tokenHash: 'hash-locale',
+      expiresAt: new Date(Date.now() + 86_400_000)
+    });
+
+    await repository.updateUserPreferences({ userId: 'user-1', preferredLocale: 'en-US' });
+
+    const tokens = prisma.__store.refreshToken.filter((row: any) => row.userId === 'user-1');
+    expect(tokens).toHaveLength(1);
+    // Not revoked: the session survives a language change.
+    expect(tokens[0].revokedAt).toBeFalsy();
+  });
+
+  it('returns null for a missing or soft-deleted user', async () => {
+    const { repository } = build();
+
+    await expect(
+      repository.updateUserPreferences({ userId: 'does-not-exist', preferredLocale: 'en-US' })
+    ).resolves.toBeNull();
+    // user-2 is soft-deleted, so it is not a valid preference target.
+    await expect(
+      repository.updateUserPreferences({ userId: 'user-2', preferredLocale: 'en-US' })
+    ).resolves.toBeNull();
   });
 
   it('loads the permission slugs of a role', async () => {

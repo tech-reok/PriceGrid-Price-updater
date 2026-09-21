@@ -3,6 +3,7 @@ import { TOKENS } from '../di/tokens';
 import { CrudService } from '../common/crud/service';
 import { ConflictError, NotFoundError, ValidationError } from '../common/errors';
 import { hashPassword } from '../common/utils/password';
+import { DEFAULT_LOCALE, requireSupportedLocale } from '../common/i18n/supported-locales';
 import type { TenantCrudRepository } from '../common/crud/repository';
 import type { ActorContext, ListQuery, Paginated } from '../types';
 
@@ -12,6 +13,18 @@ function sanitize<T extends Record<string, any> | null>(user: T): T {
   const clone: Record<string, any> = { ...user };
   delete clone.passwordHash;
   return clone as T;
+}
+
+/**
+ * Resolves the locale an administrative write should persist.
+ *
+ * Omitted on create -> the documented default (`es-419`), so existing clients
+ * and seeds keep their behaviour. An explicit value is validated here as well
+ * as in Zod: the service is also reachable directly (tests, future jobs).
+ */
+function resolveCreateLocale(value: unknown): string {
+  if (value === undefined || value === null || value === '') return DEFAULT_LOCALE;
+  return requireSupportedLocale(value);
 }
 
 @injectable()
@@ -57,7 +70,8 @@ export class UserService extends CrudService<any> {
       email,
       roleId,
       tenantId: data.tenantId ?? tenantId,
-      passwordHash: await hashPassword(password)
+      passwordHash: await hashPassword(password),
+      preferredLocale: resolveCreateLocale(data.preferredLocale)
     };
     delete payload.password;
 
@@ -91,6 +105,14 @@ export class UserService extends CrudService<any> {
       payload.passwordHash = await hashPassword(String(payload.password));
     }
     delete payload.password;
+
+    // An unrelated update (e.g. only the name) must leave the stored locale
+    // untouched; an explicit value is validated instead of silently coerced.
+    if (payload.preferredLocale !== undefined) {
+      payload.preferredLocale = requireSupportedLocale(payload.preferredLocale);
+    } else {
+      delete payload.preferredLocale;
+    }
 
     if (payload.roleId === undefined && payload.tenantId === undefined && Object.keys(payload).length === 0) {
       throw new NotFoundError('Nothing to update');

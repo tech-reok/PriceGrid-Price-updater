@@ -2,12 +2,13 @@
   <!-- Header + quick actions -->
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-bold text-forest">Dashboard</h1>
+      <h1 class="text-2xl font-bold text-forest">{{ 'dashboard.title' | transloco }}</h1>
       <p class="text-sm text-olive mt-1">
-        Estado general del catálogo de precios
         @if (session.activeTenantId()) {
-          <span> de la empresa seleccionada</span>
-        }.
+          {{ 'dashboard.subtitleWithTenant' | transloco }}
+        } @else {
+          {{ 'dashboard.subtitle' | transloco }}
+        }
       </p>
     </div>
 
@@ -16,25 +17,25 @@
         routerLink="/products"
         class="px-4 py-2 bg-white border border-line text-forest rounded-lg text-sm font-medium shadow-sm hover:bg-sidebar transition-colors inline-flex items-center gap-2"
       >
-        <lucide-icon name="plus" class="w-4 h-4"></lucide-icon> Nuevo producto
+        <lucide-icon name="plus" class="w-4 h-4"></lucide-icon> {{ 'dashboard.actions.newProduct' | transloco }}
       </a>
       <a
         routerLink="/price-lists"
         class="px-4 py-2 bg-white border border-line text-forest rounded-lg text-sm font-medium shadow-sm hover:bg-sidebar transition-colors inline-flex items-center gap-2"
       >
-        <lucide-icon name="plus" class="w-4 h-4"></lucide-icon> Nueva lista
+        <lucide-icon name="plus" class="w-4 h-4"></lucide-icon> {{ 'dashboard.actions.newPriceList' | transloco }}
       </a>
       <a
         routerLink="/prices"
         class="px-4 py-2 bg-forest text-white rounded-lg text-sm font-medium shadow-sm hover:bg-forest/90 transition-colors inline-flex items-center gap-2"
       >
-        <lucide-icon name="trending-up" class="w-4 h-4"></lucide-icon> Cargar precios
+        <lucide-icon name="trending-up" class="w-4 h-4"></lucide-icon> {{ 'dashboard.actions.uploadPrices' | transloco }}
       </a>
     </div>
   </div>
 
   @if (loading()) {
-    <app-state-panel state="loading" message="Cargando el resumen…" />
+    <app-state-panel state="loading" [message]="'dashboard.loading' | transloco" />
   } @else if (error()) {
     <app-state-panel state="error" [message]="error()!" (retry)="load()" />
   } @else {
@@ -46,7 +47,7 @@
             <lucide-icon name="package" class="w-5 h-5"></lucide-icon>
           </div>
         </div>
-        <h3 class="text-sm font-medium text-olive">Productos activos</h3>
+        <h3 class="text-sm font-medium text-olive">{{ 'dashboard.metrics.activeProducts' | transloco }}</h3>
         <p class="text-2xl font-bold text-forest mt-1">{{ summary()?.activeProducts ?? 0 }}</p>
       </div>
 
@@ -56,7 +57,7 @@
             <lucide-icon name="store" class="w-5 h-5"></lucide-icon>
           </div>
         </div>
-        <h3 class="text-sm font-medium text-olive">Marketplaces configurados</h3>
+        <h3 class="text-sm font-medium text-olive">{{ 'dashboard.metrics.marketplaces' | transloco }}</h3>
         <p class="text-2xl font-bold text-forest mt-1">{{ summary()?.marketplaces ?? 0 }}</p>
       </div>
 
@@ -66,7 +67,7 @@
             <lucide-icon name="tags" class="w-5 h-5"></lucide-icon>
           </div>
         </div>
-        <h3 class="text-sm font-medium text-olive">Listas de precios</h3>
+        <h3 class="text-sm font-medium text-olive">{{ 'dashboard.metrics.priceLists' | transloco }}</h3>
         <p class="text-2xl font-bold text-forest mt-1">{{ summary()?.priceLists ?? 0 }}</p>
       </div>
 
@@ -76,7 +77,7 @@
             <lucide-icon name="trending-up" class="w-5 h-5"></lucide-icon>
           </div>
         </div>
-        <h3 class="text-sm font-medium text-olive">Precios vigentes</h3>
+        <h3 class="text-sm font-medium text-olive">{{ 'dashboard.metrics.activePrices' | transloco }}</h3>
         <p class="text-2xl font-bold text-forest mt-1">{{ summary()?.activePrices ?? 0 }}</p>
       </div>
     </div>
@@ -89,7 +90,7 @@
             <lucide-icon name="triangle-alert" class="w-4 h-4"></lucide-icon>
           </div>
           <h2 class="text-sm font-semibold text-forest">
-            Descuentos próximos a vencer ({{ summary()?.expiringWindowDays }} días)
+            {{ 'dashboard.alerts.expiringTitle' | transloco: { days: summary()?.expiringWindowDays } }}
           </h2>
         </div>
         <ul class="divide-y divide-line/60">
@@ -97,8 +98,14 @@
             <li class="py-2.5 flex items-center justify-between gap-4 text-sm">
               <span class="font-medium text-forest">{{ discount.name }}</span>
               <span class="text-olive text-xs">
-                Vence {{ discount.endDate | appDate: false : true }} ·
-                {{ discount.type === 'percentage' ? discount.value + '%' : (discount.value | money) }}
+                {{
+                  'dashboard.alerts.expiresOn'
+                    | transloco
+                      : {
+                          date: (discount.endDate | appDate: false : true),
+                          value: (discount.type === 'percentage' ? discount.value + '%' : (discount.value | money))
+                        }
+                }}
               </span>
             </li>
           }
@@ -110,23 +117,23 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2 pg-card overflow-hidden flex flex-col">
         <div class="p-5 border-b border-line flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-forest">Precios recientes</h2>
-          <a routerLink="/prices" class="text-sm text-olive hover:text-forest font-medium">Ver todos</a>
+          <h2 class="text-lg font-semibold text-forest">{{ 'dashboard.recent.title' | transloco }}</h2>
+          <a routerLink="/prices" class="text-sm text-olive hover:text-forest font-medium">{{ 'dashboard.recent.viewAll' | transloco }}</a>
         </div>
 
         @if (recentPrices().length === 0) {
-          <div class="p-6 text-sm text-olive">Aún no hay precios capturados.</div>
+          <div class="p-6 text-sm text-olive">{{ 'dashboard.recent.empty' | transloco }}</div>
         } @else {
           <div class="overflow-x-auto">
             <table class="w-full text-left text-sm text-olive" data-testid="recent-prices-table">
               <thead class="bg-sidebar/60 text-xs uppercase font-semibold text-forest">
                 <tr>
-                  <th class="px-5 py-3">Producto</th>
-                  <th class="px-5 py-3">Lista</th>
-                  <th class="px-5 py-3">Marketplace</th>
-                  <th class="px-5 py-3 text-right">Base</th>
-                  <th class="px-5 py-3 text-right">Final</th>
-                  <th class="px-5 py-3">Estado</th>
+                  <th class="px-5 py-3">{{ 'dashboard.recent.columns.product' | transloco }}</th>
+                  <th class="px-5 py-3">{{ 'dashboard.recent.columns.priceList' | transloco }}</th>
+                  <th class="px-5 py-3">{{ 'dashboard.recent.columns.marketplace' | transloco }}</th>
+                  <th class="px-5 py-3 text-right">{{ 'dashboard.recent.columns.basePrice' | transloco }}</th>
+                  <th class="px-5 py-3 text-right">{{ 'dashboard.recent.columns.finalPrice' | transloco }}</th>
+                  <th class="px-5 py-3">{{ 'dashboard.recent.columns.status' | transloco }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-line/60">
@@ -152,12 +159,12 @@
       </div>
 
       <div class="pg-card p-5 flex flex-col">
-        <h2 class="text-lg font-semibold text-forest mb-1">Precios por marketplace</h2>
-        <p class="text-xs text-olive mb-4">Cantidad de precios registrados</p>
+        <h2 class="text-lg font-semibold text-forest mb-1">{{ 'dashboard.chart.title' | transloco }}</h2>
+        <p class="text-xs text-olive mb-4">{{ 'dashboard.chart.subtitle' | transloco }}</p>
 
         @if (chart().length === 0) {
           <div class="flex-1 flex items-center justify-center text-sm text-olive py-8">
-            Sin datos para graficar
+            {{ 'dashboard.chart.empty' | transloco }}
           </div>
         } @else {
           <div class="flex-1 h-56" data-testid="chart">

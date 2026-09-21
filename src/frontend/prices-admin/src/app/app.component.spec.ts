@@ -1,11 +1,13 @@
 import { TestBed } from '@angular/core/testing';
+import { provideTranslocoTesting } from './testing';
 import { provideRouter } from '@angular/router';
 import { AppComponent } from './app.component';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
+  window.localStorage.clear();
     await TestBed.configureTestingModule({
-      imports: [AppComponent],
+      imports: [AppComponent, provideTranslocoTesting()],
       providers: [provideRouter([])]
     }).compileComponents();
   });

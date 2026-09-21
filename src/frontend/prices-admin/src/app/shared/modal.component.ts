@@ -1,9 +1,18 @@
 import { Component, input, output } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
-/** Accessible modal shell used by every create/edit form and confirmation. */
+/**
+ * Accessible modal shell used by every create/edit form and confirmation.
+ *
+ * `title`/`subtitle` are **already resolved strings**: this is a presentational
+ * component, so the caller decides how the text is produced. A static label is
+ * passed as `[title]="'namespace.key' | transloco"`, which keeps the copy in a
+ * catalog without allocating a wrapper object on every change-detection cycle.
+ */
 @Component({
   selector: 'app-modal',
   standalone: true,
+  imports: [TranslocoPipe],
   template: `
     @if (open()) {
       <div class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 overflow-y-auto" role="dialog" aria-modal="true">
@@ -20,7 +29,8 @@ import { Component, input, output } from '@angular/core';
             <button
               type="button"
               class="p-1.5 rounded-lg text-olive hover:bg-active hover:text-forest transition-colors"
-              aria-label="Cerrar"
+              [attr.aria-label]="'common.close' | transloco"
+              data-testid="modal-close"
               (click)="closed.emit()"
             >
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -39,6 +49,7 @@ import { Component, input, output } from '@angular/core';
 })
 export class ModalComponent {
   readonly open = input<boolean>(false);
+  /** Resolved text, produced by the caller with a pipe. */
   readonly title = input<string>('');
   readonly subtitle = input<string>('');
 

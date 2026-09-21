@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { DOCUMENT } from '@angular/common';
 import { CanActivateFn, Router, UrlTree, provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -8,20 +9,12 @@ import { authGuard, guestGuard } from './auth.guard';
 import { globalAdminGuard, permissionGuard } from './permission.guard';
 import { tenantGuard } from './tenant.guard';
 import { SessionStore } from '../services/session.store';
+import { LanguageService, UI_LOCALE_STORAGE_KEY } from '../i18n/language.service';
+import { createAuthUser, installTestTranslations, provideTranslocoTesting } from '../../testing';
 import type { AuthUser } from '../models';
 
 function authUser(overrides: Partial<AuthUser> = {}): AuthUser {
-  return {
-    id: 'user-1',
-    email: 'user@example.com',
-    name: 'User',
-    roleId: 'role-1',
-    roleSlug: 'tenant_admin',
-    tenantId: 'tenant-1',
-    isGlobalAdmin: false,
-    permissions: ['products:read'],
-    ...overrides
-  };
+  return createAuthUser(overrides);
 }
 
 async function runGuard(guard: CanActivateFn): Promise<boolean | UrlTree> {
@@ -36,13 +29,33 @@ describe('authGuard', () => {
   let http: HttpTestingController;
   let session: SessionStore;
 
+  /** An unsupported browser preference, so only a cache or the API can win. */
+  function stubBrowserLocale(tag: string): void {
+    Object.defineProperty(window.navigator, 'languages', { value: [tag], configurable: true });
+    Object.defineProperty(window.navigator, 'language', { value: tag, configurable: true });
+  }
+
+  function restoreBrowserLocale(): void {
+    delete (window.navigator as unknown as Record<string, unknown>)['languages'];
+    delete (window.navigator as unknown as Record<string, unknown>)['language'];
+  }
+
   beforeEach(() => {
+    window.localStorage.clear();
     TestBed.configureTestingModule({
+      imports: [provideTranslocoTesting()],
       providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()]
     });
+    installTestTranslations();
     http = TestBed.inject(HttpTestingController);
     session = TestBed.inject(SessionStore);
     session.clear();
+  });
+
+  afterEach(() => {
+    restoreBrowserLocale();
+    window.localStorage.clear();
+    TestBed.resetTestingModule();
   });
 
   it('allows an authenticated user', async () => {
@@ -58,6 +71,50 @@ describe('authGuard', () => {
 
     expect(await result).toBe(true);
     expect(session.isAuthenticated()).toBe(true);
+  });
+
+  it('applies the restored user locale before the protected screen renders', async () => {
+    // The guest starts in English; the API says es-419, and the server
+    // preference must win by the time the guard resolves.
+    //
+    // `session.clear()` in beforeEach already cached the locale it resolved, and
+    // the cache beats the browser, so the cache is cleared after stubbing the
+    // browser preference to make the guest resolution deterministic.
+    window.localStorage.clear();
+    stubBrowserLocale('en-US');
+    const language = TestBed.inject(LanguageService);
+    language.resetToGuestLocale();
+    expect(language.activeLocale()).toBe('en-US');
+
+    const result = runGuard(authGuard);
+    http
+      .expectOne(`${environment.apiUrl}/auth/refresh`)
+      .flush({ accessToken: 'token-2', user: authUser({ preferredLocale: 'es-419' }) });
+
+    expect(await result).toBe(true);
+    expect(language.activeLocale()).toBe('es-419');
+    expect(TestBed.inject(DOCUMENT).documentElement.lang).toBe('es-419');
+  });
+
+  it('leaves the guest locale in place when the refresh fails', async () => {
+    // A cached locale is what the login page must keep showing after a failed
+    // silent restore.
+    window.localStorage.setItem(UI_LOCALE_STORAGE_KEY, 'en-US');
+    const language = TestBed.inject(LanguageService);
+    language.resetToGuestLocale();
+    expect(language.activeLocale()).toBe('en-US');
+
+    const result = runGuard(authGuard);
+    http
+      .expectOne(`${environment.apiUrl}/auth/refresh`)
+      .flush({ message: 'nope' }, { status: 401, statusText: 'Unauthorized' });
+
+    const outcome = await result;
+    expect(outcome).toBeInstanceOf(UrlTree);
+    expect(String(outcome)).toContain('/login');
+
+    expect(language.activeLocale()).toBe('en-US');
+    expect(session.isAuthenticated()).toBe(false);
   });
 
   it('redirects to the login page when the refresh fails', async () => {
@@ -77,7 +134,8 @@ describe('guestGuard', () => {
   let session: SessionStore;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+  window.localStorage.clear();
+    TestBed.configureTestingModule({ imports: [provideTranslocoTesting()], providers: [provideRouter([])] });
     session = TestBed.inject(SessionStore);
     session.clear();
   });
@@ -100,7 +158,8 @@ describe('permissionGuard', () => {
   let session: SessionStore;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+  window.localStorage.clear();
+    TestBed.configureTestingModule({ imports: [provideTranslocoTesting()], providers: [provideRouter([])] });
     session = TestBed.inject(SessionStore);
     session.clear();
   });
@@ -138,7 +197,8 @@ describe('globalAdminGuard', () => {
   let session: SessionStore;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+  window.localStorage.clear();
+    TestBed.configureTestingModule({ imports: [provideTranslocoTesting()], providers: [provideRouter([])] });
     session = TestBed.inject(SessionStore);
     session.clear();
   });
@@ -162,7 +222,8 @@ describe('tenantGuard', () => {
   let session: SessionStore;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+  window.localStorage.clear();
+    TestBed.configureTestingModule({ imports: [provideTranslocoTesting()], providers: [provideRouter([])] });
     session = TestBed.inject(SessionStore);
     session.clear();
   });

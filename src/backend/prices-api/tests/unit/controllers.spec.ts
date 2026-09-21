@@ -24,7 +24,8 @@ describe('AuthController', () => {
         user: { id: 'user-1' }
       }),
       logout: jest.fn().mockResolvedValue(undefined),
-      me: jest.fn().mockResolvedValue({ id: 'user-1', roleSlug: 'tenant_admin' })
+      me: jest.fn().mockResolvedValue({ id: 'user-1', roleSlug: 'tenant_admin' }),
+      updatePreferences: jest.fn().mockResolvedValue({ id: 'user-1', preferredLocale: 'en-US' })
     };
     return { authService, controller: new AuthController(authService as any) };
   }
@@ -85,6 +86,46 @@ describe('AuthController', () => {
     const { controller } = build();
     const error = await runHandler(controller.me, mockRequest(), mockResponse());
     expect(error).toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('updates the locale of the authenticated user only', async () => {
+    const { authService, controller } = build();
+    const req = mockRequest({ body: { preferredLocale: 'en-US' } });
+    req.user = { id: 'user-1' };
+    const res = mockResponse();
+
+    await runHandler(controller.updatePreferences, req, res);
+
+    // The target id comes from the verified token, never from the payload.
+    expect(authService.updatePreferences).toHaveBeenCalledWith('user-1', 'en-US');
+    expect(res.body).toEqual({ id: 'user-1', preferredLocale: 'en-US' });
+  });
+
+  it('ignores any user identifier supplied by the client', async () => {
+    const { authService, controller } = build();
+    const req = mockRequest({
+      body: { preferredLocale: 'en-US', userId: 'user-999', id: 'user-999' },
+      params: { id: 'user-999' }
+    });
+    req.user = { id: 'user-1' };
+
+    await runHandler(controller.updatePreferences, req, mockResponse());
+
+    expect(authService.updatePreferences).toHaveBeenCalledTimes(1);
+    expect(authService.updatePreferences).toHaveBeenCalledWith('user-1', 'en-US');
+  });
+
+  it('requires authentication to change the locale', async () => {
+    const { authService, controller } = build();
+
+    const error = await runHandler(
+      controller.updatePreferences,
+      mockRequest({ body: { preferredLocale: 'en-US' } }),
+      mockResponse()
+    );
+
+    expect(error).toBeInstanceOf(UnauthorizedError);
+    expect(authService.updatePreferences).not.toHaveBeenCalled();
   });
 });
 

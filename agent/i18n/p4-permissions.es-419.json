@@ -1,0 +1,232 @@
+{
+  "permissions": {
+    "tenants:read": {
+      "name": "Ver empresas",
+      "description": "Permite ver empresas"
+    },
+    "tenants:create": {
+      "name": "Crear empresas",
+      "description": "Permite crear empresas"
+    },
+    "tenants:update": {
+      "name": "Editar empresas",
+      "description": "Permite editar empresas"
+    },
+    "tenants:delete": {
+      "name": "Eliminar empresas",
+      "description": "Permite eliminar empresas"
+    },
+    "tenants:switch": {
+      "name": "Cambiar de empresa",
+      "description": "Permite cambiar de empresa"
+    },
+    "users:read": {
+      "name": "Ver usuarios",
+      "description": "Permite ver usuarios"
+    },
+    "users:create": {
+      "name": "Crear usuarios",
+      "description": "Permite crear usuarios"
+    },
+    "users:update": {
+      "name": "Editar usuarios",
+      "description": "Permite editar usuarios"
+    },
+    "users:delete": {
+      "name": "Eliminar usuarios",
+      "description": "Permite eliminar usuarios"
+    },
+    "roles:read": {
+      "name": "Ver roles",
+      "description": "Permite ver roles"
+    },
+    "roles:create": {
+      "name": "Crear roles",
+      "description": "Permite crear roles"
+    },
+    "roles:update": {
+      "name": "Editar roles",
+      "description": "Permite editar roles"
+    },
+    "roles:delete": {
+      "name": "Eliminar roles",
+      "description": "Permite eliminar roles"
+    },
+    "roles:assign-permissions": {
+      "name": "Asignar permisos",
+      "description": "Permite asignar permisos a un rol"
+    },
+    "permissions:read": {
+      "name": "Ver permisos",
+      "description": "Permite ver permisos"
+    },
+    "products:read": {
+      "name": "Ver productos",
+      "description": "Permite ver productos"
+    },
+    "products:create": {
+      "name": "Crear productos",
+      "description": "Permite crear productos"
+    },
+    "products:update": {
+      "name": "Editar productos",
+      "description": "Permite editar productos"
+    },
+    "products:delete": {
+      "name": "Eliminar productos",
+      "description": "Permite eliminar productos"
+    },
+    "marketplaces:read": {
+      "name": "Ver marketplaces",
+      "description": "Permite ver marketplaces"
+    },
+    "marketplaces:create": {
+      "name": "Crear marketplaces",
+      "description": "Permite crear marketplaces"
+    },
+    "marketplaces:update": {
+      "name": "Editar marketplaces",
+      "description": "Permite editar marketplaces"
+    },
+    "marketplaces:delete": {
+      "name": "Eliminar marketplaces",
+      "description": "Permite eliminar marketplaces"
+    },
+    "price-lists:read": {
+      "name": "Ver listas de precios",
+      "description": "Permite ver listas de precios"
+    },
+    "price-lists:create": {
+      "name": "Crear listas de precios",
+      "description": "Permite crear listas de precios"
+    },
+    "price-lists:update": {
+      "name": "Editar listas de precios",
+      "description": "Permite editar listas de precios"
+    },
+    "price-lists:delete": {
+      "name": "Eliminar listas de precios",
+      "description": "Permite eliminar listas de precios"
+    },
+    "prices:read": {
+      "name": "Ver precios",
+      "description": "Permite ver precios"
+    },
+    "prices:create": {
+      "name": "Crear precios",
+      "description": "Permite crear precios"
+    },
+    "prices:update": {
+      "name": "Editar precios",
+      "description": "Permite editar precios"
+    },
+    "prices:delete": {
+      "name": "Eliminar precios",
+      "description": "Permite eliminar precios"
+    },
+    "prices:calculate": {
+      "name": "Calcular precios",
+      "description": "Permite calcular precios"
+    },
+    "discounts:read": {
+      "name": "Ver descuentos",
+      "description": "Permite ver descuentos"
+    },
+    "discounts:create": {
+      "name": "Crear descuentos",
+      "description": "Permite crear descuentos"
+    },
+    "discounts:update": {
+      "name": "Editar descuentos",
+      "description": "Permite editar descuentos"
+    },
+    "discounts:delete": {
+      "name": "Eliminar descuentos",
+      "description": "Permite eliminar descuentos"
+    },
+    "price-catalog:read": {
+      "name": "Ver catálogo de precios",
+      "description": "Permite ver catálogo de precios"
+    },
+    "price-catalog:read-all": {
+      "name": "Ver todo catálogo de precios",
+      "description": "Permite ver todo catálogo de precios"
+    },
+    "price-catalog:export": {
+      "name": "Exportar catálogo de precios",
+      "description": "Permite exportar catálogo de precios"
+    },
+    "price-list-access:read": {
+      "name": "Ver acceso a listas de precios",
+      "description": "Permite ver acceso a listas de precios"
+    },
+    "price-list-access:manage": {
+      "name": "Gestionar acceso a listas de precios",
+      "description": "Permite gestionar acceso a listas de precios"
+    },
+    "price-history:read": {
+      "name": "Ver historial de precios",
+      "description": "Permite ver historial de precios"
+    },
+    "api-keys:read": {
+      "name": "Ver API keys",
+      "description": "Permite ver API keys"
+    },
+    "api-keys:create": {
+      "name": "Crear API keys",
+      "description": "Permite crear API keys"
+    },
+    "api-keys:update": {
+      "name": "Editar API keys",
+      "description": "Permite editar API keys"
+    },
+    "api-keys:delete": {
+      "name": "Eliminar API keys",
+      "description": "Permite eliminar API keys"
+    },
+    "api-keys:revoke": {
+      "name": "Revocar API keys",
+      "description": "Permite revocar API keys"
+    },
+    "currencies:read": {
+      "name": "Ver monedas",
+      "description": "Permite ver monedas"
+    },
+    "dashboard:read": {
+      "name": "Ver panel",
+      "description": "Permite ver panel"
+    },
+    "settings:read": {
+      "name": "Ver configuración",
+      "description": "Permite ver configuración"
+    },
+    "settings:update": {
+      "name": "Editar configuración",
+      "description": "Permite editar configuración"
+    }
+  },
+  "roles": {
+    "systemRoles": {
+      "global_admin": {
+        "name": "Administrador global",
+        "description": "Acceso completo a todas las empresas"
+      },
+      "tenant_admin": {
+        "name": "Administrador de empresa",
+        "description": "Acceso completo dentro de la empresa, sin la gestión global de empresas"
+      },
+      "tenant_user": {
+        "name": "Operador de empresa",
+        "description": "Acceso operativo de lectura y escritura en los módulos principales"
+      },
+      "readonly_user": {
+        "name": "Usuario de sólo lectura",
+        "description": "Acceso de sólo lectura al catálogo de precios"
+      },
+      "price_catalog_viewer": {
+        "name": "Consulta de catálogo de precios",
+        "description": "Sólo lectura y exportación de las listas asignadas"
+      }
+    }
+  }
+}

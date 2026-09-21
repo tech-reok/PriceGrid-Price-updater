@@ -10,21 +10,28 @@ import {
 } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { ModalComponent } from './modal.component';
 import { StatePanelComponent } from './state-panel.component';
 import { StatusBadgeComponent } from './status-badge.component';
 import { SwitchComponent } from './ui/switch.component';
+import { DisplayTextPipe } from './display-text.pipe';
 import { MoneyPipe } from '../core/pipes/money.pipe';
 import { AppDatePipe } from '../core/pipes/app-date.pipe';
 import { ToastService } from '../core/services/toast.service';
 import { TenantContextService } from '../core/services/tenant-context.service';
-import { extractApiErrorMessage, extractFieldErrors, readPath } from '../core/utils/format';
+import { DisplayTextService } from '../core/i18n/display-text.service';
+import { ApiErrorLocalizerService } from '../core/i18n/api-error-localizer.service';
+import { readPath } from '../core/utils/format';
+import { EMPTY_TEXT } from './crud-page.types';
 import type { CrudResource } from '../core/services/crud-resource';
 import type { PageMeta } from '../core/models';
 import type {
   ColumnConfig,
   CrossValidator,
+  CrudMessages,
+  DisplayText,
   FieldConfig,
   FieldOption,
   OptionLoader,
@@ -34,10 +41,14 @@ import type {
   RowAction
 } from './crud-page.types';
 
+/**
+ * Status filter chips. Labels are catalog keys resolved while rendering, so the
+ * filter follows a runtime language switch.
+ */
 const STATUS_CHIPS: FieldOption[] = [
-  { value: '', label: 'Todos' },
-  { value: 'active', label: 'Activos' },
-  { value: 'inactive', label: 'Inactivos' }
+  { value: '', label: { key: 'common.all' } },
+  { value: 'active', label: { key: 'common.activeOnly' } },
+  { value: 'inactive', label: { key: 'common.inactiveOnly' } }
 ];
 
 /**
@@ -46,16 +57,23 @@ const STATUS_CHIPS: FieldOption[] = [
  * Every module composes this component with its own columns/fields and service,
  * which keeps the look, the loading/empty/error states and the CRUD behaviour
  * identical across the application.
+ *
+ * All chrome copy lives in the `common.*` / `crud.*` catalogs. Messages that
+ * mention the entity are complete sentences with an `{{entity}}` parameter —
+ * never concatenated fragments — and a page can replace any of them wholesale
+ * through the `messages` input.
  */
 @Component({
   selector: 'app-crud-page',
   standalone: true,
   imports: [
     ReactiveFormsModule,
+    TranslocoPipe,
     ModalComponent,
     StatePanelComponent,
     StatusBadgeComponent,
     SwitchComponent,
+    DisplayTextPipe,
     MoneyPipe,
     AppDatePipe
   ],
@@ -66,11 +84,16 @@ export class CrudPageComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly tenantContext = inject(TenantContextService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly text = inject(DisplayTextService);
+  private readonly errorLocalizer = inject(ApiErrorLocalizerService);
 
   // --- configuration -------------------------------------------------------
-  readonly title = input.required<string>();
-  readonly subtitle = input<string>('');
-  readonly entityLabel = input<string>('registro');
+  readonly title = input<DisplayText>(EMPTY_TEXT);
+  readonly subtitle = input<DisplayText>(EMPTY_TEXT);
+  /** Singular noun for the entity, interpolated into the default messages. */
+  readonly entityLabel = input<DisplayText>({ key: 'common.record' });
+  /** Whole-sentence overrides for the chrome; see `CrudMessages`. */
+  readonly messages = input<CrudMessages>({});
   readonly columns = input<ColumnConfig[]>([]);
   readonly fields = input<FieldConfig[]>([]);
   readonly service = input.required<CrudResource<any>>();
@@ -78,12 +101,12 @@ export class CrudPageComponent implements OnInit {
   readonly canEdit = input<boolean>(false);
   readonly canDelete = input<boolean>(false);
   readonly statusFilter = input<boolean>(true);
-  readonly searchPlaceholder = input<string>('Buscar…');
-  readonly emptyMessage = input<string>('');
+  readonly searchPlaceholder = input<DisplayText>({ key: 'common.search' });
+  readonly emptyMessage = input<DisplayText>(EMPTY_TEXT);
   readonly selectSources = input<Record<string, OptionLoader>>({});
   readonly crossValidators = input<CrossValidator[]>([]);
   readonly previewRunner = input<PreviewRunner | null>(null);
-  readonly previewLabel = input<string>('Calcular');
+  readonly previewLabel = input<DisplayText>({ key: 'crud.preview' });
   readonly mapToForm = input<((row: any) => Record<string, unknown>) | null>(null);
   readonly mapToPayload = input<PayloadMapper | null>(null);
   readonly pageSize = input<number>(10);
@@ -121,9 +144,43 @@ export class CrudPageComponent implements OnInit {
   readonly searchInput = new FormControl('');
 
   readonly isEditing = computed(() => this.editing() !== null);
-  readonly modalTitle = computed(() =>
-    this.isEditing() ? `Editar ${this.entityLabel()}` : `Nuevo ${this.entityLabel()}`
+
+  /** Resolved singular entity name used as the `{{entity}}` parameter. */
+  readonly entity = computed(() => this.text.resolve(this.entityLabel()));
+
+  readonly createLabel = computed(() => this.message(this.messages().create, 'crud.create'));
+
+  readonly editLabel = computed(() => this.message(this.messages().edit, 'crud.edit'));
+
+  readonly modalTitle = computed(() => (this.isEditing() ? this.editLabel() : this.createLabel()));
+
+  readonly loadingMessage = computed(() => this.message(this.messages().loading, 'crud.loading'));
+
+  readonly emptyTitle = computed(() => this.message(this.messages().emptyTitle, 'crud.emptyTitle'));
+
+  /**
+   * Body copy of the empty state. The existing `emptyMessage` input wins, so a
+   * page keeps its specific invitation ("Invita a tu equipo...") and everything
+   * else inherits the generic sentence.
+   */
+  readonly emptyHint = computed(() => {
+    const override = this.text.resolve(this.emptyMessage());
+    return override.trim() !== '' ? override : this.text.translate('crud.emptyHint');
+  });
+
+  readonly invalidFormMessage = computed(() =>
+    this.message(this.messages().invalidForm, 'common.reviewFields')
   );
+
+  readonly deleteTitle = computed(() => this.message(this.messages().deleteTitle, 'crud.deleteTitle'));
+
+  readonly deleteSubtitle = computed(() => this.text.translate('crud.deleteSubtitle'));
+
+  readonly deleteMessage = computed(() =>
+    this.message(this.messages().deleteMessage, 'crud.deleteMessage')
+  );
+
+  readonly formSubtitle = computed(() => this.text.translate('crud.formSubtitle'));
 
   /** Controls currently visible, honouring `visibleWhen`, create/edit flags. */
   readonly visibleFields = computed(() =>
@@ -183,7 +240,7 @@ export class CrudPageComponent implements OnInit {
           this.loading.set(false);
         },
         error: (error: unknown) => {
-          this.error.set(extractApiErrorMessage(error));
+          this.error.set(this.errorLocalizer.message(error));
           this.items.set([]);
           this.loading.set(false);
         }
@@ -240,6 +297,19 @@ export class CrudPageComponent implements OnInit {
 
   cell(row: any, column: ColumnConfig): unknown {
     return readPath(row, column.key);
+  }
+
+  /**
+   * Text for the default (text) cell branch.
+   *
+   * A column may override the raw value — used to translate system catalog rows
+   * by slug while leaving user-created rows untouched. The override wins even
+   * when it resolves to an empty string, so a column can deliberately render
+   * blank instead of leaking the raw database copy.
+   */
+  cellText(row: any, column: ColumnConfig): string {
+    if (column.value) return this.text.resolve(column.value(row));
+    return this.asText(this.cell(row, column));
   }
 
   asText(value: unknown): string {
@@ -332,7 +402,7 @@ export class CrudPageComponent implements OnInit {
         this.previewing.set(false);
       },
       error: (error: unknown) => {
-        this.formError.set(extractApiErrorMessage(error));
+        this.formError.set(this.errorLocalizer.message(error));
         this.previewResults.set([]);
         this.previewing.set(false);
       }
@@ -347,7 +417,7 @@ export class CrudPageComponent implements OnInit {
       const zodErrors = (this.form.errors?.['zod'] ?? {}) as Record<string, string>;
       this.fieldErrors.set(zodErrors);
       if (Object.keys(zodErrors).length > 0) {
-        this.formError.set('Revisa los campos marcados.');
+        this.formError.set(this.invalidFormMessage());
       }
       return;
     }
@@ -366,7 +436,9 @@ export class CrudPageComponent implements OnInit {
       next: () => {
         this.saving.set(false);
         this.toast.success(
-          editing ? `${this.entityLabel()} actualizado correctamente` : `${this.entityLabel()} creado correctamente`
+          editing
+            ? this.message(this.messages().updated, 'crud.updated')
+            : this.message(this.messages().created, 'crud.created')
         );
         this.closeModal();
         this.changed.emit();
@@ -374,8 +446,8 @@ export class CrudPageComponent implements OnInit {
       },
       error: (error: unknown) => {
         this.saving.set(false);
-        this.formError.set(extractApiErrorMessage(error));
-        this.fieldErrors.set(extractFieldErrors(error));
+        this.formError.set(this.errorLocalizer.message(error));
+        this.fieldErrors.set(this.errorLocalizer.fieldErrors(error));
       }
     });
   }
@@ -400,21 +472,32 @@ export class CrudPageComponent implements OnInit {
       .subscribe({
         next: () => {
           this.deleting.set(false);
-          this.toast.success(`${this.entityLabel()} eliminado`);
+          this.toast.success(this.message(this.messages().deleted, 'crud.deleted'));
           this.deleteTarget.set(null);
           this.changed.emit();
           void this.load();
         },
         error: (error: unknown) => {
           this.deleting.set(false);
-          this.toast.error(extractApiErrorMessage(error));
+          this.toast.error(this.errorLocalizer.message(error));
           this.deleteTarget.set(null);
         }
       });
   }
 
+  /**
+   * Resolves a field error for display.
+   *
+   * Cross-field (Zod) validators store a **catalog key** as the issue message so
+   * the copy follows a runtime language switch; server errors arrive already
+   * localized by `ApiErrorLocalizerService`. Values that are not known keys are
+   * rendered verbatim, so an unmapped API message is never swallowed.
+   */
   fieldError(key: string): string | null {
-    return this.fieldErrors()[key] ?? null;
+    const value = this.fieldErrors()[key];
+    if (value === undefined) return null;
+
+    return this.text.has(value) ? this.text.translate(value) : value;
   }
 
   isInvalid(field: FieldConfig): boolean {
@@ -424,5 +507,22 @@ export class CrudPageComponent implements OnInit {
 
   visibleRowActions(row: any): RowAction[] {
     return this.rowActions().filter((action) => (action.visible ? action.visible(row) : true));
+  }
+
+  // --- internals -----------------------------------------------------------
+
+  /**
+   * Resolves a chrome message: a page-supplied override wins, otherwise the
+   * catalog default is translated with the entity interpolated.
+   */
+  private message(override: DisplayText | undefined, fallbackKey: string): string {
+    const entity = this.entity();
+
+    if (override !== undefined) {
+      const resolved = this.text.resolve(override, { entity });
+      if (resolved.trim() !== '') return resolved;
+    }
+
+    return this.text.translate(fallbackKey, { entity });
   }
 }

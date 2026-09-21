@@ -1,0 +1,112 @@
+{
+  "priceCatalog": {
+    "title": "Catálogo de precios",
+    "subtitle": "Consulta únicamente las listas asignadas a tu usuario.",
+    "eyebrow": "Consulta autorizada",
+    "columns": {
+      "product": "Producto",
+      "sku": "SKU",
+      "basePrice": "Base",
+      "appliedDiscount": "Descuento aplicado",
+      "discount": "Descuento",
+      "finalPrice": "Precio final"
+    },
+    "fields": {
+      "priceList": { "label": "Lista de precios", "placeholder": "Selecciona una lista" },
+      "marketplace": { "label": "Marketplace", "placeholder": "Selecciona un marketplace" },
+      "search": { "label": "Buscar producto", "placeholder": "SKU o nombre" }
+    },
+    "aria": { "exportFormat": "Formato de exportación" },
+    "actions": { "export": "Exportar", "exporting": "Encolando…", "download": "Descargar" },
+    "noDiscount": "Sin descuento",
+    "loading": "Cargando precios…",
+    "selectPrompt": "Selecciona una lista y un marketplace para consultar.",
+    "empty": "No hay precios disponibles para estos filtros.",
+    "productsCount": "{{count}} productos",
+    "pagination": "Página {{page}} de {{totalPages}}",
+    "exports": {
+      "title": "Mis exportaciones",
+      "subtitle": "Las solicitudes se procesan en segundo plano.",
+      "empty": "Aún no tienes exportaciones."
+    },
+    "toasts": { "exportQueued": "Exportación encolada" }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Estado general del catálogo de precios.",
+    "subtitleWithTenant": "Estado general del catálogo de precios de la empresa seleccionada.",
+    "loading": "Cargando el resumen…",
+    "actions": {
+      "newProduct": "Nuevo producto",
+      "newPriceList": "Nueva lista",
+      "uploadPrices": "Cargar precios"
+    },
+    "metrics": {
+      "activeProducts": "Productos activos",
+      "marketplaces": "Marketplaces configurados",
+      "priceLists": "Listas de precios",
+      "activePrices": "Precios vigentes"
+    },
+    "alerts": {
+      "expiringTitle": "Descuentos próximos a vencer ({{days}} días)",
+      "expiresOn": "Vence el {{date}} · {{value}}"
+    },
+    "recent": {
+      "title": "Precios recientes",
+      "viewAll": "Ver todos",
+      "empty": "Aún no hay precios capturados.",
+      "columns": {
+        "product": "Producto",
+        "priceList": "Lista",
+        "marketplace": "Marketplace",
+        "basePrice": "Base",
+        "finalPrice": "Final",
+        "status": "Estado"
+      }
+    },
+    "chart": {
+      "title": "Precios por marketplace",
+      "subtitle": "Cantidad de precios registrados",
+      "empty": "Sin datos para graficar"
+    }
+  },
+  "settings": {
+    "title": "Configuración",
+    "subtitle": "Catálogos del sistema y contexto de la sesión actual.",
+    "session": {
+      "title": "Sesión actual",
+      "user": "Usuario",
+      "role": "Rol",
+      "permissions": "Permisos"
+    },
+    "timeZone": {
+      "title": "Zona horaria de la empresa",
+      "subtitle": "Las fechas de precios y descuentos usan el calendario de esta zona.",
+      "label": "Zona IANA",
+      "searchPlaceholder": "Buscar zona o ciudad...",
+      "clockLabel": "Hora local de negocio",
+      "save": "Guardar zona horaria",
+      "saving": "Guardando...",
+      "updated": "Zona horaria actualizada"
+    },
+    "currencies": {
+      "title": "Monedas",
+      "description": "En la fase 1 el catálogo de monedas es de sólo lectura. Se usa para validar el código ISO y redondear los precios; no hay conversión automática.",
+      "loading": "Cargando monedas…",
+      "emptyTitle": "Sin monedas",
+      "emptyMessage": "Ejecuta los seeds para cargar MXN y USD.",
+      "columns": {
+        "code": "Código",
+        "name": "Nombre",
+        "symbol": "Símbolo",
+        "decimals": "Decimales",
+        "status": "Estado"
+      }
+    },
+    "discountRules": {
+      "title": "Reglas de descuento vigentes",
+      "singleDiscount": "Se aplica un único descuento por precio, con prioridad producto → lista de precios → marketplace → precio base.",
+      "stacking": "La acumulación de descuentos y la conversión de moneda están planificadas para fases futuras."
+    }
+  }
+}

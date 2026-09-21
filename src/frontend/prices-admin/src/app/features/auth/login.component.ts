@@ -2,20 +2,21 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { AuthService } from '../../core/services/auth.service';
-import { extractApiErrorMessage } from '../../core/utils/format';
+import { ApiErrorLocalizerService } from '../../core/i18n/api-error-localizer.service';
 import { PriceGridLogoComponent } from '../../shared/pricegrid-logo.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, LucideAngularModule, PriceGridLogoComponent],
+  imports: [ReactiveFormsModule, LucideAngularModule, TranslocoPipe, PriceGridLogoComponent],
   template: `
     <div class="min-h-screen w-full flex items-center justify-center p-6">
       <div class="w-full max-w-md bg-surface rounded-2xl shadow-app border border-line overflow-hidden">
         <div class="bg-header px-8 py-7 border-b border-line">
           <app-pricegrid-logo></app-pricegrid-logo>
-          <p class="text-sm text-olive mt-2">Administración de precios multi-marketplace</p>
+          <p class="text-sm text-olive mt-2">{{ 'auth.brandTagline' | transloco }}</p>
         </div>
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="px-8 py-8 space-y-5" data-testid="login-form">
@@ -29,7 +30,7 @@ import { PriceGridLogoComponent } from '../../shared/pricegrid-logo.component';
           }
 
           <div>
-            <label class="pg-label" for="email">Correo electrónico</label>
+            <label class="pg-label" for="email">{{ 'auth.email.label' | transloco }}</label>
             <input
               id="email"
               type="email"
@@ -37,15 +38,15 @@ import { PriceGridLogoComponent } from '../../shared/pricegrid-logo.component';
               class="pg-input"
               [class.pg-input-invalid]="invalid('email')"
               autocomplete="username"
-              placeholder="admin@empresa.com"
+              [placeholder]="'auth.email.placeholder' | transloco"
             />
             @if (invalid('email')) {
-              <p class="text-xs text-danger mt-1">Ingresa un correo válido.</p>
+              <p class="text-xs text-danger mt-1">{{ 'auth.email.invalid' | transloco }}</p>
             }
           </div>
 
           <div>
-            <label class="pg-label" for="password">Contraseña</label>
+            <label class="pg-label" for="password">{{ 'auth.password.label' | transloco }}</label>
             <input
               id="password"
               type="password"
@@ -56,7 +57,7 @@ import { PriceGridLogoComponent } from '../../shared/pricegrid-logo.component';
               placeholder="••••••••"
             />
             @if (invalid('password')) {
-              <p class="text-xs text-danger mt-1">La contraseña es obligatoria.</p>
+              <p class="text-xs text-danger mt-1">{{ 'auth.password.invalid' | transloco }}</p>
             }
           </div>
 
@@ -67,12 +68,11 @@ import { PriceGridLogoComponent } from '../../shared/pricegrid-logo.component';
             data-testid="login-submit"
           >
             <lucide-icon name="log-in" class="w-4 h-4"></lucide-icon>
-            {{ loading() ? 'Ingresando…' : 'Ingresar' }}
+            {{ (loading() ? 'auth.submitting' : 'auth.submit') | transloco }}
           </button>
 
           <p class="text-xs text-olive text-center leading-relaxed">
-            Las credenciales iniciales de desarrollo se generan con los seeds.<br />
-            Consulta el README antes de usarlas fuera de un entorno local.
+            {{ 'auth.seedNote' | transloco }}
           </p>
         </form>
       </div>
@@ -83,6 +83,7 @@ export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly errorLocalizer = inject(ApiErrorLocalizerService);
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -115,7 +116,7 @@ export class LoginComponent {
       },
       error: (error: unknown) => {
         this.loading.set(false);
-        this.error.set(extractApiErrorMessage(error));
+        this.error.set(this.errorLocalizer.message(error));
       }
     });
   }

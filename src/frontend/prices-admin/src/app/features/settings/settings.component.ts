@@ -1,9 +1,12 @@
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { CurrencyService } from '../../core/services/catalog.services';
 import { TenantService } from '../../core/services/access.services';
 import { ToastService } from '../../core/services/toast.service';
 import { Currency, Tenant } from '../../core/models';
-import { extractApiErrorMessage } from '../../core/utils/format';
+import { ApiErrorLocalizerService } from '../../core/i18n/api-error-localizer.service';
+import { DisplayTextService } from '../../core/i18n/display-text.service';
+import { LocaleFormattingService } from '../../core/i18n/locale-formatting.service';
 import { StatePanelComponent } from '../../shared/state-panel.component';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { LucideAngularModule } from 'lucide-angular';
@@ -16,13 +19,17 @@ import { listTimeZoneOptions } from '../../core/utils/time-zones';
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [StatePanelComponent, StatusBadgeComponent, LucideAngularModule],
+  imports: [StatePanelComponent, StatusBadgeComponent, LucideAngularModule, TranslocoPipe],
   templateUrl: './settings.component.html'
 })
 export class SettingsComponent implements OnDestroy, OnInit {
   private readonly currencyService = inject(CurrencyService);
   private readonly tenantService = inject(TenantService);
   private readonly toast = inject(ToastService);
+  private readonly errorLocalizer = inject(ApiErrorLocalizerService);
+  private readonly text = inject(DisplayTextService);
+  /** Public because the template formats the clock and the currency names with it. */
+  readonly formatting = inject(LocaleFormattingService);
   readonly session = inject(SessionStore);
 
   readonly loading = signal(true);
@@ -38,15 +45,21 @@ export class SettingsComponent implements OnDestroy, OnInit {
     if (!query) return this.timeZoneOptions;
     return this.timeZoneOptions.filter((option) => option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query));
   });
+  /**
+   * Business clock: the date and time are rendered in the tenant time zone,
+   * which is an independent setting from the UI language, while their shape
+   * follows the active locale. A malformed time zone coming from the API must
+   * not break the panel, so it degrades to the browser time zone.
+   */
   readonly currentBusinessTime = computed(() => {
     try {
-      return new Intl.DateTimeFormat('es-MX', {
+      return this.formatting.formatDate(this.now(), {
         dateStyle: 'medium',
         timeStyle: 'short',
         timeZone: this.selectedTimeZone()
-      }).format(this.now());
+      });
     } catch {
-      return this.now().toLocaleString('es-MX');
+      return this.formatting.formatDate(this.now(), { dateStyle: 'medium', timeStyle: 'short' });
     }
   });
   private readonly now = signal(new Date());
@@ -59,7 +72,7 @@ export class SettingsComponent implements OnDestroy, OnInit {
         this.loading.set(false);
       },
       error: (error: unknown) => {
-        this.error.set(extractApiErrorMessage(error));
+        this.error.set(this.errorLocalizer.message(error));
         this.loading.set(false);
       }
     });
@@ -69,7 +82,7 @@ export class SettingsComponent implements OnDestroy, OnInit {
         this.tenant.set(tenant);
         this.selectedTimeZone.set(tenant.timeZone || 'UTC');
       },
-      error: (error: unknown) => this.error.set(extractApiErrorMessage(error))
+      error: (error: unknown) => this.error.set(this.errorLocalizer.message(error))
     });
   }
 
@@ -81,11 +94,11 @@ export class SettingsComponent implements OnDestroy, OnInit {
         this.selectedTimeZone.set(response.timeZone);
         this.tenant.update((current) => current ? { ...current, timeZone: response.timeZone } : current);
         this.timeZoneSaving.set(false);
-        this.toast.success('Zona horaria actualizada');
+        this.toast.success(this.text.translate('settings.timeZone.updated'));
       },
       error: (error: unknown) => {
         this.timeZoneSaving.set(false);
-        this.toast.error(extractApiErrorMessage(error));
+        this.toast.error(this.errorLocalizer.message(error));
       }
     });
   }

@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { AppError, NotFoundError } from '../common/errors';
+import { AppError, NotFoundError, type ErrorDetail } from '../common/errors';
 import { logger } from '../common/logger';
 import { env } from '../config/env';
 import { zodDetails } from './validate';
@@ -10,7 +10,7 @@ export interface ErrorEnvelope {
   statusCode: number;
   code: string;
   message: string;
-  details?: { field?: string; message: string }[];
+  details?: ErrorDetail[];
   traceId?: string;
   timestamp: string;
   stack?: string;

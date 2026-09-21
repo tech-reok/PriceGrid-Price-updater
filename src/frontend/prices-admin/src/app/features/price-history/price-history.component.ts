@@ -10,11 +10,11 @@ import type { ColumnConfig } from '../../shared/crud-page.types';
   imports: [CrudPageComponent],
   template: `
     <app-crud-page
-      title="Historial de precios"
-      subtitle="Registro append-only de cada cambio de precio base o final."
-      entityLabel="movimiento"
-      searchPlaceholder="Buscar por motivo…"
-      emptyMessage="Aún no hay cambios de precio registrados."
+      [title]="{ key: 'priceHistory.title' }"
+      [subtitle]="{ key: 'priceHistory.subtitle' }"
+      [entityLabel]="{ key: 'priceHistory.entity' }"
+      [searchPlaceholder]="{ key: 'priceHistory.searchPlaceholder' }"
+      [emptyMessage]="{ key: 'priceHistory.emptyMessage' }"
       [columns]="columns"
       [fields]="[]"
       [service]="service"
@@ -30,13 +30,13 @@ export class PriceHistoryComponent {
   readonly service = inject(PriceHistoryService);
 
   readonly columns: ColumnConfig[] = [
-    { key: 'createdAt', label: 'Fecha', type: 'date' },
-    { key: 'product.name', label: 'Producto' },
-    { key: 'oldBasePrice', label: 'Base anterior', type: 'money', align: 'right' },
-    { key: 'newBasePrice', label: 'Base nueva', type: 'money', align: 'right' },
-    { key: 'oldFinalPrice', label: 'Final anterior', type: 'money', align: 'right' },
-    { key: 'newFinalPrice', label: 'Final nuevo', type: 'money', align: 'right' },
-    { key: 'changedByType', label: 'Actor' },
-    { key: 'reason', label: 'Motivo' }
+    { key: 'createdAt', label: { key: 'priceHistory.columns.date' }, type: 'date' },
+    { key: 'product.name', label: { key: 'common.product' } },
+    { key: 'oldBasePrice', label: { key: 'priceHistory.columns.oldBase' }, type: 'money', align: 'right' },
+    { key: 'newBasePrice', label: { key: 'priceHistory.columns.newBase' }, type: 'money', align: 'right' },
+    { key: 'oldFinalPrice', label: { key: 'priceHistory.columns.oldFinal' }, type: 'money', align: 'right' },
+    { key: 'newFinalPrice', label: { key: 'priceHistory.columns.newFinal' }, type: 'money', align: 'right' },
+    { key: 'changedByType', label: { key: 'priceHistory.columns.actor' } },
+    { key: 'reason', label: { key: 'priceHistory.columns.reason' } }
   ];
 }

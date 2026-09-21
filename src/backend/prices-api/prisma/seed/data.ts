@@ -180,6 +180,13 @@ export const DEMO_TENANT = {
   notes: 'Empresa inicial para desarrollo y pruebas'
 };
 
+/**
+ * UI language pinned for the seeded accounts. The demo dataset is
+ * Spanish-language copy, so it is pinned explicitly instead of inheriting
+ * `DEFAULT_LOCALE`, which is free to change.
+ */
+export const DEMO_USER_LOCALE = 'es-419' as const;
+
 export const DEMO_MARKETPLACES = [
   { name: 'Amazon', code: 'amazon' as const },
   { name: 'Mercado Libre', code: 'mercadolibre' as const },

@@ -3,6 +3,8 @@
  * These mirror the payloads returned by the Express API.
  */
 
+import type { SupportedLocale } from '../i18n/supported-locales';
+
 export interface PageMeta {
   page: number;
   limit: number;
@@ -25,11 +27,25 @@ export interface ListQuery {
   [key: string]: unknown;
 }
 
+/**
+ * Machine-readable field detail from the API error envelope.
+ *
+ * `code`/`params` let the UI render a localized message instead of the English
+ * `message` fallback; `field` is retained so Reactive Forms can bind the error
+ * to the offending control.
+ */
+export interface ApiErrorDetail {
+  field?: string;
+  code?: string;
+  message: string;
+  params?: Record<string, unknown>;
+}
+
 export interface ApiErrorResponse {
   statusCode: number;
   code: string;
   message: string;
-  details?: { field?: string; message: string }[];
+  details?: ApiErrorDetail[];
   traceId?: string;
   timestamp?: string;
 }
@@ -45,6 +61,8 @@ export interface AuthUser {
   tenantId: string | null;
   isGlobalAdmin: boolean;
   permissions: string[];
+  /** Per-user UI language; it is presentation state, not authorization data. */
+  preferredLocale: SupportedLocale;
 }
 
 export interface LoginResponse {
@@ -101,6 +119,7 @@ export interface User {
   email: string;
   roleId: string;
   status: string;
+  preferredLocale?: SupportedLocale;
   lastLoginAt?: string | null;
   role?: Role;
   tenant?: Tenant;

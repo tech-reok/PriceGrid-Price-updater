@@ -6,7 +6,9 @@ import { environment } from '../../../environments/environment';
 import { jwtInterceptor } from './jwt.interceptor';
 import { errorInterceptor, resetRefreshState } from './error.interceptor';
 import { SessionStore } from '../services/session.store';
+import { LanguageService } from '../i18n/language.service';
 import type { AuthUser } from '../models';
+import { installTestTranslations, provideTranslocoTesting } from '../../testing';
 
 function authUser(overrides: Partial<AuthUser> = {}): AuthUser {
   return {
@@ -18,6 +20,7 @@ function authUser(overrides: Partial<AuthUser> = {}): AuthUser {
     tenantId: 'tenant-1',
     isGlobalAdmin: false,
     permissions: ['products:read'],
+    preferredLocale: 'es-419',
     ...overrides
   };
 }
@@ -28,7 +31,9 @@ describe('jwtInterceptor', () => {
   let session: SessionStore;
 
   beforeEach(() => {
+  window.localStorage.clear();
     TestBed.configureTestingModule({
+      imports: [provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         provideHttpClient(withInterceptors([jwtInterceptor])),
@@ -50,6 +55,47 @@ describe('jwtInterceptor', () => {
     expect(request.request.withCredentials).toBe(true);
     expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush({});
+  });
+
+  it('sends a canonical Accept-Language for the active locale', () => {
+    const language = TestBed.inject(LanguageService);
+
+    http.get('/api/test').subscribe();
+
+    const request = httpMock.expectOne('/api/test');
+    const acceptLanguage = request.request.headers.get('Accept-Language');
+    // Canonical means one of the two supported codes, never a loose browser tag
+    // such as `es-MX` or `en-GB`. Asserted against the service so the test does
+    // not depend on the locale of the host running the suite.
+    expect(acceptLanguage).toBe(language.activeLocale());
+    expect(['es-419', 'en-US']).toContain(acceptLanguage ?? '');
+    request.flush({});
+  });
+
+  it('sends the language of the active session, not the browser default', () => {
+    session.setSession('token-1', authUser({ preferredLocale: 'en-US' }));
+
+    http.get('/api/test').subscribe();
+
+    const request = httpMock.expectOne('/api/test');
+    expect(request.request.headers.get('Accept-Language')).toBe('en-US');
+    // The other headers are preserved alongside it.
+    expect(request.request.headers.get('Authorization')).toBe('Bearer token-1');
+    request.flush({});
+  });
+
+  it('follows a runtime language switch', () => {
+    session.setSession('token-1', authUser({ preferredLocale: 'es-419' }));
+
+    http.get('/api/test').subscribe();
+    expect(httpMock.expectOne('/api/test').request.headers.get('Accept-Language')).toBe('es-419');
+
+    TestBed.inject(LanguageService).setLocale('en-US');
+
+    http.get('/api/test').subscribe();
+    const second = httpMock.expectOne('/api/test');
+    expect(second.request.headers.get('Accept-Language')).toBe('en-US');
+    second.flush({});
   });
 
   it('attaches the bearer token', () => {
@@ -84,8 +130,10 @@ describe('errorInterceptor', () => {
   let session: SessionStore;
 
   beforeEach(() => {
+  window.localStorage.clear();
     resetRefreshState();
     TestBed.configureTestingModule({
+      imports: [provideTranslocoTesting()],
       providers: [
         provideRouter([]),
         provideHttpClient(withInterceptors([errorInterceptor])),

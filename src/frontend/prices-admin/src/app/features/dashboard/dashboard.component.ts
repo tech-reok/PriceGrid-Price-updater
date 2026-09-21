@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { LucideAngularModule } from 'lucide-angular';
 import { BarChartModule, ScaleType, type Color } from '@swimlane/ngx-charts';
 import { DashboardService } from '../../core/services/dashboard.service';
@@ -9,7 +10,7 @@ import { StatePanelComponent } from '../../shared/state-panel.component';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 import { MoneyPipe } from '../../core/pipes/money.pipe';
 import { AppDatePipe } from '../../core/pipes/app-date.pipe';
-import { extractApiErrorMessage } from '../../core/utils/format';
+import { ApiErrorLocalizerService } from '../../core/i18n/api-error-localizer.service';
 import type { DashboardSummary, MarketplaceChartPoint, Price } from '../../core/models';
 
 @Component({
@@ -17,6 +18,7 @@ import type { DashboardSummary, MarketplaceChartPoint, Price } from '../../core/
   standalone: true,
   imports: [
     RouterLink,
+    TranslocoPipe,
     LucideAngularModule,
     BarChartModule,
     StatePanelComponent,
@@ -28,6 +30,7 @@ import type { DashboardSummary, MarketplaceChartPoint, Price } from '../../core/
 })
 export class DashboardComponent implements OnInit {
   private readonly dashboardService = inject(DashboardService);
+  private readonly errorLocalizer = inject(ApiErrorLocalizerService);
   private readonly tenantContext = inject(TenantContextService);
   readonly session = inject(SessionStore);
 
@@ -66,7 +69,7 @@ export class DashboardComponent implements OnInit {
         this.loading.set(false);
       },
       error: (error: unknown) => {
-        this.error.set(extractApiErrorMessage(error));
+        this.error.set(this.errorLocalizer.message(error));
         this.loading.set(false);
       }
     });

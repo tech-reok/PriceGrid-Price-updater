@@ -1,0 +1,112 @@
+{
+  "priceCatalog": {
+    "title": "Price catalog",
+    "subtitle": "You can only view the price lists assigned to your user.",
+    "eyebrow": "Authorized view",
+    "columns": {
+      "product": "Product",
+      "sku": "SKU",
+      "basePrice": "Base",
+      "appliedDiscount": "Applied discount",
+      "discount": "Discount",
+      "finalPrice": "Final price"
+    },
+    "fields": {
+      "priceList": { "label": "Price list", "placeholder": "Select a price list" },
+      "marketplace": { "label": "Marketplace", "placeholder": "Select a marketplace" },
+      "search": { "label": "Search product", "placeholder": "SKU or name" }
+    },
+    "aria": { "exportFormat": "Export format" },
+    "actions": { "export": "Export", "exporting": "Queuing…", "download": "Download" },
+    "noDiscount": "No discount",
+    "loading": "Loading prices…",
+    "selectPrompt": "Select a price list and a marketplace to search.",
+    "empty": "There are no prices available for these filters.",
+    "productsCount": "{{count}} products",
+    "pagination": "Page {{page}} of {{totalPages}}",
+    "exports": {
+      "title": "My exports",
+      "subtitle": "Requests are processed in the background.",
+      "empty": "You do not have any exports yet."
+    },
+    "toasts": { "exportQueued": "Export queued" }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Overall status of the price catalog.",
+    "subtitleWithTenant": "Overall status of the price catalog for the selected company.",
+    "loading": "Loading the summary…",
+    "actions": {
+      "newProduct": "New product",
+      "newPriceList": "New price list",
+      "uploadPrices": "Upload prices"
+    },
+    "metrics": {
+      "activeProducts": "Active products",
+      "marketplaces": "Configured marketplaces",
+      "priceLists": "Price lists",
+      "activePrices": "Current prices"
+    },
+    "alerts": {
+      "expiringTitle": "Discounts expiring soon ({{days}} days)",
+      "expiresOn": "Expires on {{date}} · {{value}}"
+    },
+    "recent": {
+      "title": "Recent prices",
+      "viewAll": "View all",
+      "empty": "No prices have been captured yet.",
+      "columns": {
+        "product": "Product",
+        "priceList": "List",
+        "marketplace": "Marketplace",
+        "basePrice": "Base",
+        "finalPrice": "Final",
+        "status": "Status"
+      }
+    },
+    "chart": {
+      "title": "Prices by marketplace",
+      "subtitle": "Number of recorded prices",
+      "empty": "No data to chart"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "System catalogs and the current session context.",
+    "session": {
+      "title": "Current session",
+      "user": "User",
+      "role": "Role",
+      "permissions": "Permissions"
+    },
+    "timeZone": {
+      "title": "Company time zone",
+      "subtitle": "Price and discount dates use the calendar of this time zone.",
+      "label": "IANA time zone",
+      "searchPlaceholder": "Search time zone or city...",
+      "clockLabel": "Local business time",
+      "save": "Save time zone",
+      "saving": "Saving...",
+      "updated": "Time zone updated"
+    },
+    "currencies": {
+      "title": "Currencies",
+      "description": "In phase 1 the currency catalog is read-only. It is used to validate the ISO code and round prices; there is no automatic conversion.",
+      "loading": "Loading currencies…",
+      "emptyTitle": "No currencies",
+      "emptyMessage": "Run the seeds to load MXN and USD.",
+      "columns": {
+        "code": "Code",
+        "name": "Name",
+        "symbol": "Symbol",
+        "decimals": "Decimals",
+        "status": "Status"
+      }
+    },
+    "discountRules": {
+      "title": "Current discount rules",
+      "singleDiscount": "A single discount is applied per price, with priority product → price list → marketplace → base price.",
+      "stacking": "Discount stacking and currency conversion are planned for future phases."
+    }
+  }
+}

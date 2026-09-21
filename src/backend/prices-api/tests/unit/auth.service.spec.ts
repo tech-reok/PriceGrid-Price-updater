@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { AuthService, GLOBAL_ADMIN_ROLE } from '../../src/services/auth.service';
-import { UnauthorizedError } from '../../src/common/errors';
+import { UnauthorizedError, ValidationError } from '../../src/common/errors';
 import { hashPassword } from '../../src/common/utils/password';
 import { hashRefreshToken } from '../../src/common/utils/tokens';
 import { env } from '../../src/config/env';
@@ -23,6 +23,12 @@ function createRepository(userRow: UserWithRole | null): { repository: IAuthRepo
     findUserById: jest.fn().mockResolvedValue(userRow),
     findPermissionsByRoleId: jest.fn().mockResolvedValue(['products:read', 'prices:read']),
     touchLastLogin: jest.fn().mockResolvedValue(undefined),
+    updateUserPreferences: jest.fn(async (input: { userId: string; preferredLocale: string }) => {
+      if (!userRow) return null;
+      // Behave like a real store: later reads must observe the new value.
+      userRow.preferredLocale = input.preferredLocale;
+      return { ...userRow, ...input };
+    }),
     createRefreshToken: jest.fn(async (input: any) => {
       const row: TokenRow = {
         id: `rt-${tokens.length + 1}`,
@@ -58,6 +64,7 @@ async function buildUser(overrides: Partial<UserWithRole> = {}): Promise<UserWit
     passwordHash: await hashPassword('secret-password'),
     roleId: 'role-1',
     status: 'active',
+    preferredLocale: 'es-419',
     deletedAt: null,
     role: { id: 'role-1', slug: 'tenant_admin', name: 'Tenant admin', isSystem: true, status: 'active' },
     ...overrides
@@ -79,7 +86,8 @@ describe('AuthService.login', () => {
       email: 'admin@example.com',
       roleSlug: 'tenant_admin',
       tenantId: 'tenant-1',
-      isGlobalAdmin: false
+      isGlobalAdmin: false,
+      preferredLocale: 'es-419'
     });
     expect(session.user.permissions).toEqual(['products:read', 'prices:read']);
 
@@ -99,6 +107,32 @@ describe('AuthService.login', () => {
     expect(payload.tenantId).toBe('tenant-1');
     expect(payload.role).toBe('tenant_admin');
     expect(payload.exp).toBeGreaterThan(payload.iat);
+  });
+
+  it('never signs the locale into the JWT (it is presentation, not authorization)', async () => {
+    const userRow = await buildUser({ preferredLocale: 'en-US' });
+    const { repository } = createRepository(userRow);
+    const service = new AuthService(repository);
+
+    const session = await service.login('admin@example.com', 'secret-password');
+    const payload = jwt.verify(session.accessToken, env.jwt.accessSecret) as any;
+
+    expect(payload.preferredLocale).toBeUndefined();
+    expect(payload.locale).toBeUndefined();
+    expect(JSON.stringify(payload)).not.toContain('en-US');
+    // ...but the response body does carry it.
+    expect(session.user.preferredLocale).toBe('en-US');
+  });
+
+  it('falls back to es-419 when the stored value is missing or unknown', async () => {
+    for (const stored of [undefined, null, '', 'es-MX', 'fr-FR', 42 as any]) {
+      const userRow = await buildUser({ preferredLocale: stored });
+      const { repository } = createRepository(userRow);
+      const service = new AuthService(repository);
+
+      const session = await service.login('admin@example.com', 'secret-password');
+      expect(session.user.preferredLocale).toBe('es-419');
+    }
   });
 
   it('flags the global admin role and its null tenant', async () => {
@@ -227,6 +261,24 @@ describe('AuthService.refresh', () => {
 
     await expect(service.refresh(first.refreshToken)).rejects.toMatchObject({ code: 'USER_INACTIVE' });
   });
+
+  it('does not rotate refresh tokens when only the locale changed', async () => {
+    const userRow = await buildUser({ preferredLocale: 'en-US' });
+    const { repository, tokens } = createRepository(userRow);
+    const service = new AuthService(repository);
+
+    const first = await service.login('admin@example.com', 'secret-password');
+    expect(first.user.preferredLocale).toBe('en-US');
+    const before = tokens.length;
+
+    await service.updatePreferences('user-1', 'es-419');
+
+    expect(tokens).toHaveLength(before);
+    expect(tokens[0].revokedAt).toBeFalsy();
+    // The existing refresh token still works and now reports the new locale.
+    const refreshed = await service.refresh(first.refreshToken);
+    expect(refreshed.user.preferredLocale).toBe('es-419');
+  });
 });
 
 describe('AuthService.logout', () => {
@@ -276,11 +328,15 @@ describe('AuthService.logout', () => {
 
 describe('AuthService.me', () => {
   it('returns the user context', async () => {
-    const userRow = await buildUser();
+    const userRow = await buildUser({ preferredLocale: 'en-US' });
     const { repository } = createRepository(userRow);
     const service = new AuthService(repository);
 
-    await expect(service.me('user-1')).resolves.toMatchObject({ id: 'user-1', roleSlug: 'tenant_admin' });
+    await expect(service.me('user-1')).resolves.toMatchObject({
+      id: 'user-1',
+      roleSlug: 'tenant_admin',
+      preferredLocale: 'en-US'
+    });
   });
 
   it('rejects an inactive user', async () => {
@@ -292,9 +348,104 @@ describe('AuthService.me', () => {
   });
 });
 
+describe('AuthService.updatePreferences', () => {
+  it('persists the locale and returns a complete AuthUser', async () => {
+    const userRow = await buildUser({ preferredLocale: 'es-419' });
+    const { repository, mocks } = createRepository(userRow);
+    const service = new AuthService(repository);
+
+    const updated = await service.updatePreferences('user-1', 'en-US');
+
+    expect(mocks.updateUserPreferences).toHaveBeenCalledWith({
+      userId: 'user-1',
+      preferredLocale: 'en-US'
+    });
+    // The whole context comes back, not just the changed field.
+    expect(updated).toEqual({
+      id: 'user-1',
+      email: 'admin@example.com',
+      name: 'Admin',
+      roleId: 'role-1',
+      roleSlug: 'tenant_admin',
+      tenantId: 'tenant-1',
+      isGlobalAdmin: false,
+      permissions: ['products:read', 'prices:read'],
+      preferredLocale: 'en-US'
+    });
+  });
+
+  it('lets a global administrator with no selected company change their language', async () => {
+    const userRow = await buildUser({
+      tenantId: null,
+      role: { id: 'role-g', slug: GLOBAL_ADMIN_ROLE, name: 'Global', isSystem: true, status: 'active' }
+    });
+    const { repository } = createRepository(userRow);
+    const service = new AuthService(repository);
+
+    const updated = await service.updatePreferences('user-1', 'en-US');
+
+    expect(updated.isGlobalAdmin).toBe(true);
+    expect(updated.tenantId).toBeNull();
+    expect(updated.preferredLocale).toBe('en-US');
+  });
+
+  it('rejects an unsupported locale without touching the repository', async () => {
+    const userRow = await buildUser();
+    const { repository, mocks } = createRepository(userRow);
+    const service = new AuthService(repository);
+
+    for (const rejected of ['es', 'en', 'es-MX', 'fr-FR', '', null, undefined, 42]) {
+      await expect(service.updatePreferences('user-1', rejected as any)).rejects.toBeInstanceOf(
+        ValidationError
+      );
+    }
+
+    // Defense in depth: nothing was written.
+    expect(mocks.updateUserPreferences).not.toHaveBeenCalled();
+  });
+
+  it('exposes a stable, parameterized detail on rejection', async () => {
+    const userRow = await buildUser();
+    const { repository } = createRepository(userRow);
+    const service = new AuthService(repository);
+
+    await expect(service.updatePreferences('user-1', 'es-MX')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: [
+        {
+          field: 'preferredLocale',
+          code: 'UNSUPPORTED_LOCALE',
+          params: { allowed: ['es-419', 'en-US'] }
+        }
+      ]
+    });
+  });
+
+  it('rejects a user that no longer exists', async () => {
+    const { repository, mocks } = createRepository(null);
+    const service = new AuthService(repository);
+    mocks.updateUserPreferences.mockResolvedValue(null);
+
+    await expect(service.updatePreferences('ghost', 'en-US')).rejects.toMatchObject({
+      code: 'USER_INACTIVE'
+    });
+  });
+
+  it('rejects a user that became inactive', async () => {
+    const userRow = await buildUser({ status: 'inactive' });
+    const { repository, mocks } = createRepository(userRow);
+    const service = new AuthService(repository);
+    mocks.updateUserPreferences.mockResolvedValue(await buildUser({ status: 'inactive' }));
+
+    await expect(service.updatePreferences('user-1', 'en-US')).rejects.toMatchObject({
+      code: 'USER_INACTIVE'
+    });
+  });
+});
+
 describe('AuthService.verifyAccessToken', () => {
   it('validates a token signed with the access secret', async () => {
-    const userRow = await buildUser();
+    const userRow = await buildUser({ preferredLocale: 'en-US' });
     const { repository } = createRepository(userRow);
     const service = new AuthService(repository);
 
@@ -302,7 +453,12 @@ describe('AuthService.verifyAccessToken', () => {
       expiresIn: '5m'
     });
 
-    await expect(service.verifyAccessToken(token)).resolves.toMatchObject({ id: 'user-1' });
+    // The middleware reloads the user, so the locale always reflects the
+    // current database value even though it is not in the token.
+    await expect(service.verifyAccessToken(token)).resolves.toMatchObject({
+      id: 'user-1',
+      preferredLocale: 'en-US'
+    });
   });
 
   it('rejects a malformed or foreign token', async () => {
