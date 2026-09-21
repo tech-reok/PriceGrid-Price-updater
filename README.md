@@ -13,6 +13,7 @@ API keys and scopes are the foundation for it.
 ## Table of contents
 
 - [Stack](#stack)
+- [Branding](#branding)
 - [Repository layout](#repository-layout)
 - [Prerequisites](#prerequisites)
 - [Backend: install, configure and run](#backend-install-configure-and-run)
@@ -45,6 +46,25 @@ API keys and scopes are the foundation for it.
 > releases require Angular 21+ and Tailwind 4, which is why they are not used. Themed
 > wrappers live in `src/app/shared/ui/` (the shadcn/spartan copy-in model); today the
 > toggle is built on the real `BrnSwitch` primitive.
+
+---
+
+## Branding
+
+PriceGrid uses a product-focused logo built around a price tag and internal grid nodes,
+matching the system's purpose: price administration and marketplace catalog propagation.
+The Angular implementation lives in
+`src/frontend/prices-admin/src/app/shared/pricegrid-logo.component.ts` and is reused by
+the login header and the authenticated sidebar.
+
+Brand colors used by the logo:
+
+| Token | Hex | Use |
+|-------|-----|-----|
+| Forest | `#314534` | Price tag body and `Price` text |
+| Olive | `#66745C` | `Grid` text |
+| Accent | `#7FA36B` | Internal grid lines |
+| Surface | `#FAFBF6` | Tag nodes and hole |
 
 ---
 

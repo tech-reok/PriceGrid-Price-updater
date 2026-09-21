@@ -5,6 +5,7 @@ import { AuthService } from '../core/services/auth.service';
 import { SessionStore } from '../core/services/session.store';
 import { TenantContextService } from '../core/services/tenant-context.service';
 import { TenantService } from '../core/services/access.services';
+import { PriceGridLogoComponent } from '../shared/pricegrid-logo.component';
 import { ToastHostComponent } from '../shared/toast-host.component';
 import type { Tenant } from '../core/models';
 
@@ -24,6 +25,7 @@ interface NavItem {
     RouterLink,
     RouterLinkActive,
     LucideAngularModule,
+    PriceGridLogoComponent,
     ToastHostComponent
   ],
   templateUrl: './shell.component.html'
