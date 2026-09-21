@@ -196,6 +196,19 @@ describe('access services', () => {
     http.expectOne(`${API}/tenants/me`).flush({ id: 't1' });
   });
 
+  it('reads and updates the current company time zone', () => {
+    const service = TestBed.inject(TenantService);
+
+    service.timeZone().subscribe();
+    http.expectOne(`${API}/tenants/me/time-zone`).flush({ timeZone: 'UTC' });
+
+    service.updateTimeZone('America/Mexico_City').subscribe();
+    const request = http.expectOne(`${API}/tenants/me/time-zone`);
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ timeZone: 'America/Mexico_City' });
+    request.flush({ timeZone: 'America/Mexico_City' });
+  });
+
   it('lists users', () => {
     TestBed.inject(UserService).list().subscribe();
     http.expectOne(`${API}/users`).flush({ data: [], meta: {} });

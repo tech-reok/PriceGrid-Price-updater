@@ -32,6 +32,24 @@ export class TenantController {
     res.json(toPlain(await this.tenantService.current(context.tenantId)));
   });
 
+  timeZone = asyncHandler(async (req: Request, res: Response) => {
+    const context = req as RequestContext;
+    if (!context.tenantId) throw new UnauthorizedError('No company selected', 'TENANT_REQUIRED');
+    const tenant = await this.tenantService.current(context.tenantId);
+    res.json(toPlain({ timeZone: tenant.timeZone }));
+  });
+
+  updateTimeZone = asyncHandler(async (req: Request, res: Response) => {
+    const context = req as RequestContext;
+    if (!context.tenantId) throw new UnauthorizedError('No company selected', 'TENANT_REQUIRED');
+    const tenant = await this.tenantService.updateTimeZone(
+      context.tenantId,
+      String(req.body.timeZone),
+      requireActor(req)
+    );
+    res.json(toPlain({ timeZone: tenant.timeZone }));
+  });
+
   create = asyncHandler(async (req: Request, res: Response) => {
     const created = await this.tenantService.create(null, req.body ?? {}, requireActor(req));
     res.status(201).json(toPlain(created));

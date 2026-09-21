@@ -4,6 +4,7 @@ import { CurrencyService } from '../../core/services/catalog.services';
 import { TenantService } from '../../core/services/access.services';
 import { SessionStore } from '../../core/services/session.store';
 import { currencyOptionLoader, staticOptions } from '../../core/utils/options';
+import { listTimeZoneOptions } from '../../core/utils/time-zones';
 import type { ColumnConfig, FieldConfig } from '../../shared/crud-page.types';
 
 /** Companies (tenants). Visible and manageable only by the global admin. */
@@ -38,6 +39,7 @@ export class CompaniesComponent {
     { key: 'legalName', label: 'Razón social' },
     { key: 'slug', label: 'Slug' },
     { key: 'defaultCurrency', label: 'Moneda' },
+    { key: 'timeZone', label: 'Zona horaria' },
     { key: 'status', label: 'Estado', type: 'status' }
   ];
 
@@ -46,6 +48,14 @@ export class CompaniesComponent {
     { key: 'legalName', label: 'Razón social', type: 'text', required: true },
     { key: 'slug', label: 'Slug', type: 'text', required: true, placeholder: 'mi-empresa', help: 'Minúsculas y guiones.' },
     { key: 'defaultCurrency', label: 'Moneda por defecto', type: 'select', required: true, optionsKey: 'currencies' },
+    {
+      key: 'timeZone',
+      label: 'Zona horaria',
+      type: 'select',
+      required: true,
+      options: listTimeZoneOptions(),
+      defaultValue: 'UTC'
+    },
     {
       key: 'status',
       label: 'Estado',

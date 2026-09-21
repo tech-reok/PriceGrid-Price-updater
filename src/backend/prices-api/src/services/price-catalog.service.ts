@@ -2,6 +2,8 @@ import { inject, injectable } from 'tsyringe';
 import { TOKENS } from '../di/tokens';
 import { NotFoundError, ValidationError } from '../common/errors';
 import { buildPaginationMeta } from '../common/utils/pagination';
+import { businessDateKey, dateKeyToStoredDate } from '../common/utils/business-date';
+import { resolveTenantTimeZone } from '../common/utils/tenant-time-zone';
 import { calculateFinalPrice } from './pricing.engine';
 import type { AuthUser, ListQuery, Paginated } from '../types';
 import type { PriceListAccessService } from './price-list-access.service';
@@ -43,6 +45,8 @@ export class PriceCatalogService {
     if (!relation) throw new NotFoundError('Marketplace not found');
 
     const now = new Date();
+    const timeZone = await resolveTenantTimeZone(this.prisma, tenantId);
+    const currentDate = dateKeyToStoredDate(businessDateKey(now, timeZone));
     const prices = await this.prisma.price.findMany({
       where: {
         tenantId,
@@ -50,8 +54,8 @@ export class PriceCatalogService {
         marketplaceId: query.marketplaceId,
         status: 'active',
         deletedAt: null,
-        startDate: { lte: now },
-        OR: [{ endDate: null }, { endDate: { gte: now } }]
+        startDate: { lte: currentDate },
+        OR: [{ endDate: null }, { endDate: { gte: currentDate } }]
       },
       include: {
         product: { include: { currency: true } },
@@ -88,7 +92,7 @@ export class PriceCatalogService {
           currencyDecimals: decimals.get(price.currencyCode) ?? 2
         },
         discounts,
-        { now }
+        { now, timeZone }
       );
 
       result.push({

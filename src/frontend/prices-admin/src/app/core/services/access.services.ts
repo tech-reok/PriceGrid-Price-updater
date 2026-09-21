@@ -14,6 +14,14 @@ export class TenantService extends CrudResource<Tenant> {
   me() {
     return this.http.get<Tenant>(`${this.baseUrl}/me`);
   }
+
+  timeZone() {
+    return this.http.get<{ timeZone: string }>(`${this.baseUrl}/me/time-zone`);
+  }
+
+  updateTimeZone(timeZone: string) {
+    return this.http.patch<{ timeZone: string }>(`${this.baseUrl}/me/time-zone`, { timeZone });
+  }
 }
 
 @Injectable({ providedIn: 'root' })

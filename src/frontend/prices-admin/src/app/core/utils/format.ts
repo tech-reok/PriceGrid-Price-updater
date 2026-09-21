@@ -8,6 +8,16 @@ export function toDateInputValue(value: string | Date | null | undefined): strin
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** Formats a database DATE value using UTC calendar components. */
+export function toDateOnlyInputValue(value: string | Date | null | undefined): string {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
 /** Reads the human message from the API error envelope. */
 export function extractApiErrorMessage(error: unknown): string {
   const payload = (error as { error?: unknown })?.error;

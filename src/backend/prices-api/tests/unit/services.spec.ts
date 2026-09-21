@@ -62,6 +62,7 @@ describe('TenantService', () => {
           slug: 'acme',
           status: 'active',
           defaultCurrency: 'MXN',
+          timeZone: 'UTC',
           deletedAt: null
         }
       ]
@@ -102,6 +103,20 @@ describe('TenantService', () => {
   it('returns the current company', async () => {
     const service = build();
     await expect(service.current('t1')).resolves.toMatchObject({ id: 't1' });
+  });
+
+  it('updates the current company time zone with audit context', async () => {
+    const service = build();
+
+    const updated: any = await service.updateTimeZone('t1', 'America/Mexico_City', ACTOR);
+
+    expect(updated).toMatchObject({ id: 't1', timeZone: 'America/Mexico_City' });
+  });
+
+  it('rejects an invalid company time zone', async () => {
+    const service = build();
+
+    await expect(service.updateTimeZone('t1', 'Invalid/Zone', ACTOR)).rejects.toBeInstanceOf(ValidationError);
   });
 });
 
@@ -676,6 +691,26 @@ describe('DiscountService', () => {
     expect(created.tenantId).toBe(TENANT);
     expect(created.createdBy).toBe('user-1');
     expect(created.createdByType).toBe('user');
+  });
+
+  it('rejects a duplicate discount name with a domain conflict', async () => {
+    const { service } = build();
+    await service.create(TENANT, { ...baseDiscount }, ACTOR);
+
+    await expect(service.create(TENANT, { ...baseDiscount }, ACTOR)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'DISCOUNT_NAME_TAKEN'
+    });
+  });
+
+  it('allows a record to retain its own name during update', async () => {
+    const { service } = build();
+    const created: any = await service.create(TENANT, { ...baseDiscount }, ACTOR);
+
+    await expect(service.update(TENANT, created.id, { name: 'Verano' }, ACTOR)).resolves.toMatchObject({
+      id: created.id,
+      name: 'Verano'
+    });
   });
 
   it('rejects a product-scoped discount pointing at another tenant', async () => {

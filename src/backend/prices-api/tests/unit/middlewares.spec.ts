@@ -113,6 +113,15 @@ describe('error handler middleware', () => {
     expect(res.body.code).toBe('INVALID_JSON');
   });
 
+  it('maps database unique-constraint races to 409 without exposing Prisma internals', () => {
+    const res = mockResponse();
+    errorHandler({ code: 'P2002' }, mockRequest(), res, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.body).toMatchObject({ code: 'UNIQUE_CONSTRAINT' });
+    expect(res.body.message).not.toContain('Prisma');
+  });
+
   it('maps unknown errors to 500 and hides internals in production', () => {
     const res = mockResponse();
     errorHandler(new Error('boom'), mockRequest(), res, jest.fn());

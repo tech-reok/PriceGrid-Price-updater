@@ -70,6 +70,7 @@ export interface Tenant {
   slug: string;
   status: string;
   defaultCurrency: string;
+  timeZone: string;
   notes?: string | null;
   currency?: Currency;
 }

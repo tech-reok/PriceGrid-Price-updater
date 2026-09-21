@@ -344,6 +344,18 @@ describe('module pages', () => {
               })
             )
           }
+        },
+        {
+          provide: TenantService,
+          useValue: {
+            ...resourceStub(),
+            me: jasmine.createSpy('me').and.returnValue(of({ timeZone: 'UTC' })),
+            updateTimeZone: jasmine.createSpy('updateTimeZone').and.returnValue(of({ timeZone: 'UTC' }))
+          }
+        },
+        {
+          provide: ToastService,
+          useValue: { success: jasmine.createSpy(), error: jasmine.createSpy(), info: jasmine.createSpy(), dismiss: jasmine.createSpy(), clear: jasmine.createSpy(), toasts: () => [] }
         }
       ]
     }).compileComponents();

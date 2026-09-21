@@ -71,6 +71,16 @@ describe('pricing engine — validity and scope matching', () => {
     expect(isWithinValidity(discount({ endDate: new Date('2024-06-01') }), NOW)).toBe(false);
   });
 
+  it('keeps a same-day discount active through the tenant local end of day', () => {
+    const sameDay = discount({
+      startDate: new Date('2026-09-19T00:00:00.000Z'),
+      endDate: new Date('2026-09-19T00:00:00.000Z')
+    });
+
+    expect(isWithinValidity(sameDay, new Date('2026-09-20T05:59:59.999Z'), 'America/Mexico_City')).toBe(true);
+    expect(isWithinValidity(sameDay, new Date('2026-09-20T06:00:00.000Z'), 'America/Mexico_City')).toBe(false);
+  });
+
   it('requires an active status', () => {
     expect(isDiscountApplicable(discount({ status: 'inactive' }), NOW)).toBe(false);
     expect(isDiscountApplicable(discount(), NOW)).toBe(true);
