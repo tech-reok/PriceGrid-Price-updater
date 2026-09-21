@@ -42,7 +42,7 @@ describe('seed catalogs', () => {
   });
 
   it('builds the full module:action permission catalog', () => {
-    expect(PERMISSION_CATALOG).toHaveLength(46);
+    expect(PERMISSION_CATALOG).toHaveLength(51);
     expect(ALL_PERMISSION_SLUGS).toContain('products:read');
     expect(ALL_PERMISSION_SLUGS).toContain('prices:calculate');
     expect(ALL_PERMISSION_SLUGS).toContain('api-keys:revoke');
@@ -51,12 +51,13 @@ describe('seed catalogs', () => {
     expect(ALL_PERMISSION_SLUGS).toContain('currencies:read');
   });
 
-  it('defines the four system roles', () => {
+  it('defines the system roles', () => {
     expect(SYSTEM_ROLES.map((role) => role.slug)).toEqual([
       'global_admin',
       'tenant_admin',
       'tenant_user',
-      'readonly_user'
+      'readonly_user',
+      'price_catalog_viewer'
     ]);
   });
 
@@ -112,8 +113,8 @@ describe('base seeds', () => {
     const first = await seedRoles(prisma);
     const second = await seedRoles(prisma);
 
-    expect(prisma.__store.role).toHaveLength(4);
-    expect(Object.keys(first).sort()).toEqual(['global_admin', 'readonly_user', 'tenant_admin', 'tenant_user']);
+    expect(prisma.__store.role).toHaveLength(5);
+    expect(Object.keys(first).sort()).toEqual(['global_admin', 'price_catalog_viewer', 'readonly_user', 'tenant_admin', 'tenant_user']);
     expect(first.global_admin).toBe(second.global_admin);
 
     // No duplicated role_permission rows on the second run.
@@ -156,7 +157,7 @@ describe('runSeeds orchestrator', () => {
     expect(summary.demo).toBeUndefined();
     expect(summary.currencies).toBe(2);
     expect(summary.permissions).toBe(PERMISSION_CATALOG.length);
-    expect(summary.roles).toHaveLength(4);
+    expect(summary.roles).toHaveLength(5);
 
     expect(prisma.__store.tenant ?? []).toHaveLength(0);
     expect(prisma.__store.user ?? []).toHaveLength(0);

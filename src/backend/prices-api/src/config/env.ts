@@ -41,6 +41,12 @@ export const env = {
 
   logLevel: str('LOG_LEVEL', 'info'),
 
+  exports: {
+    directory: str('EXPORT_DIRECTORY', 'storage/exports'),
+    retentionHours: num('EXPORT_RETENTION_HOURS', 24),
+    workerIntervalMs: num('EXPORT_WORKER_INTERVAL_MS', 2000)
+  },
+
   /**
    * Demo seeds (company, demo users, catalog demo data) are only allowed in
    * development, or when ALLOW_DEMO_SEED is explicitly true.

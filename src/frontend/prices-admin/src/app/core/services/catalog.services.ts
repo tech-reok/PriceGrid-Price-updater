@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { CrudResource } from './crud-resource';
+import { environment } from '../../../environments/environment';
 import type {
   Currency,
   Discount,
@@ -10,6 +11,7 @@ import type {
   PriceList,
   Product
 } from '../models';
+import type { CatalogRow, ExportRequest, ListQuery, Paginated } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class ProductService extends CrudResource<Product> {
@@ -73,5 +75,42 @@ export class CurrencyService extends CrudResource<Currency> {
 export class PermissionService extends CrudResource<Permission> {
   constructor(http: HttpClient) {
     super(http, 'permissions');
+  }
+}
+
+@Injectable({ providedIn: 'root' })
+export class PriceCatalogService {
+  private readonly baseUrl = `${environment.apiUrl}/price-catalog`;
+
+  constructor(private readonly http: HttpClient) {}
+
+  priceLists() {
+    return this.http.get<PriceList[]>(`${this.baseUrl}/price-lists`);
+  }
+
+  marketplaces(priceListId: string) {
+    return this.http.get<Marketplace[]>(`${this.baseUrl}/marketplaces`, {
+      params: { priceListId }
+    });
+  }
+
+  list(query: ListQuery & { priceListId: string; marketplaceId: string }) {
+    let params = new HttpParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== '') params = params.set(key, String(value));
+    }
+    return this.http.get<Paginated<CatalogRow>>(this.baseUrl, { params });
+  }
+
+  requestExport(input: { priceListId: string; marketplaceId: string; format: 'csv' | 'json' | 'txt'; search?: string }) {
+    return this.http.post<ExportRequest>(`${this.baseUrl}/exports`, input);
+  }
+
+  exports() {
+    return this.http.get<ExportRequest[]>(`${this.baseUrl}/exports`);
+  }
+
+  downloadExport(id: string) {
+    return this.http.get(`${this.baseUrl}/exports/${id}/download`, { responseType: 'blob', observe: 'response' });
   }
 }

@@ -26,6 +26,8 @@ export const PERMISSION_MODULES: Record<string, string[]> = {
   'price-lists': ['read', 'create', 'update', 'delete'],
   prices: ['read', 'create', 'update', 'delete', 'calculate'],
   discounts: ['read', 'create', 'update', 'delete'],
+  'price-catalog': ['read', 'read-all', 'export'],
+  'price-list-access': ['read', 'manage'],
   'price-history': ['read'],
   'api-keys': ['read', 'create', 'update', 'delete', 'revoke'],
   currencies: ['read'],
@@ -43,6 +45,8 @@ const PRETTY_MODULE: Record<string, string> = {
   'price-lists': 'price lists',
   prices: 'prices',
   discounts: 'discounts',
+  'price-catalog': 'price catalog',
+  'price-list-access': 'price-list access',
   'price-history': 'price history',
   'api-keys': 'API keys',
   currencies: 'currencies',
@@ -57,6 +61,8 @@ const PRETTY_ACTION: Record<string, string> = {
   delete: 'Delete',
   switch: 'Switch company',
   'assign-permissions': 'Assign permissions',
+  manage: 'Manage',
+  'read-all': 'View all',
   calculate: 'Calculate',
   revoke: 'Revoke'
 };
@@ -123,6 +129,8 @@ export const READONLY_USER_PERMISSIONS = [
   'dashboard:read'
 ];
 
+export const PRICE_CATALOG_VIEWER_PERMISSIONS = ['price-catalog:read', 'price-catalog:export'];
+
 export interface RoleSeed {
   slug: string;
   name: string;
@@ -154,6 +162,12 @@ export const SYSTEM_ROLES: RoleSeed[] = [
     name: 'Read-only user',
     description: 'Read-only access to the price catalog',
     permissions: READONLY_USER_PERMISSIONS
+  },
+  {
+    slug: 'price_catalog_viewer',
+    name: 'Price catalog viewer',
+    description: 'Read and export assigned price lists only',
+    permissions: PRICE_CATALOG_VIEWER_PERMISSIONS
   }
 ];
 

@@ -105,6 +105,12 @@ export interface User {
   tenant?: Tenant;
 }
 
+export interface PriceListAccess {
+  userId: string;
+  priceListIds: string[];
+  priceLists: PriceList[];
+}
+
 // --- Pricing ---------------------------------------------------------------
 
 export interface Product {
@@ -192,6 +198,41 @@ export interface Discount {
   product?: Product;
   priceList?: PriceList;
   marketplace?: Marketplace;
+}
+
+export interface CatalogRow {
+  product: { id: string; sku: string; name: string };
+  priceList: { id: string; name: string };
+  marketplace: { id: string; name: string; code: string };
+  basePrice: number;
+  discountAmount: number;
+  finalPrice: number;
+  scope: 'product' | 'price_list' | 'marketplace' | 'base';
+  appliedDiscount: {
+    id: string;
+    name: string;
+    type: 'percentage' | 'fixed';
+    value: number;
+    appliesTo: string;
+    priority: number;
+  } | null;
+  currencyCode: string;
+  calculatedAt: string;
+}
+
+export interface ExportRequest {
+  id: string;
+  priceListId: string;
+  marketplaceId: string;
+  format: 'csv' | 'json' | 'txt';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'expired';
+  fileName?: string | null;
+  contentType?: string | null;
+  byteSize?: number | null;
+  errorMessage?: string | null;
+  createdAt: string;
+  completedAt?: string | null;
+  expiresAt?: string | null;
 }
 
 export interface PriceHistoryEntry {

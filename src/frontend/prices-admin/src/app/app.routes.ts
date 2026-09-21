@@ -28,8 +28,16 @@ export const routes: Routes = [
 
       {
         path: 'dashboard',
+        canActivate: [tenantGuard, permissionGuard('dashboard:read')],
         loadComponent: () =>
           import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent)
+      },
+
+      {
+        path: 'price-catalog',
+        canActivate: [tenantGuard, permissionGuard('price-catalog:read')],
+        loadComponent: () =>
+          import('./features/price-catalog/price-catalog.component').then((m) => m.PriceCatalogComponent)
       },
 
       // Global-admin only
