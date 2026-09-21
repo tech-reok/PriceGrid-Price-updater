@@ -7,12 +7,7 @@
       data-testid="sidebar"
     >
       <div class="h-16 flex items-center justify-between px-6 border-b border-line">
-        <div class="flex items-center gap-2 text-forest font-bold text-lg tracking-tight">
-          <div class="bg-forest text-white p-1.5 rounded-lg">
-            <lucide-icon name="leaf" class="w-5 h-5"></lucide-icon>
-          </div>
-          <span>PriceGrid</span>
-        </div>
+        <app-pricegrid-logo></app-pricegrid-logo>
         <button type="button" class="md:hidden text-olive" (click)="closeSidebar()" aria-label="Cerrar menú">
           <lucide-icon name="x" class="w-5 h-5"></lucide-icon>
         </button>

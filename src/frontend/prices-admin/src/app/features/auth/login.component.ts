@@ -4,21 +4,17 @@ import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { AuthService } from '../../core/services/auth.service';
 import { extractApiErrorMessage } from '../../core/utils/format';
+import { PriceGridLogoComponent } from '../../shared/pricegrid-logo.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, LucideAngularModule],
+  imports: [ReactiveFormsModule, LucideAngularModule, PriceGridLogoComponent],
   template: `
     <div class="min-h-screen w-full flex items-center justify-center p-6">
       <div class="w-full max-w-md bg-surface rounded-2xl shadow-app border border-line overflow-hidden">
         <div class="bg-header px-8 py-7 border-b border-line">
-          <div class="flex items-center gap-2 text-forest font-bold text-xl">
-            <div class="bg-forest text-white p-2 rounded-lg">
-              <lucide-icon name="leaf" class="w-5 h-5"></lucide-icon>
-            </div>
-            PriceGrid
-          </div>
+          <app-pricegrid-logo></app-pricegrid-logo>
           <p class="text-sm text-olive mt-2">Administración de precios multi-marketplace</p>
         </div>
 
