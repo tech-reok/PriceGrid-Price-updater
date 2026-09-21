@@ -1,5 +1,7 @@
 import { inject, injectable } from 'tsyringe';
 import { TOKENS } from '../di/tokens';
+import { businessDateKey, dateKeyToStoredDate, addBusinessDays } from '../common/utils/business-date';
+import { resolveTenantTimeZone } from '../common/utils/tenant-time-zone';
 
 const EXPIRING_WINDOW_DAYS = 30;
 
@@ -9,7 +11,9 @@ export class DashboardService {
 
   async summary(tenantId: string) {
     const now = new Date();
-    const soon = new Date(now.getTime() + EXPIRING_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const timeZone = await resolveTenantTimeZone(this.prisma, tenantId);
+    const currentDate = dateKeyToStoredDate(businessDateKey(now, timeZone));
+    const soon = dateKeyToStoredDate(addBusinessDays(businessDateKey(now, timeZone), EXPIRING_WINDOW_DAYS));
 
     const [activeProducts, marketplaces, priceLists, expiringDiscounts, activePrices] = await Promise.all([
       this.prisma.product.count({ where: { tenantId, deletedAt: null, status: 'active' } }),
@@ -20,7 +24,7 @@ export class DashboardService {
           tenantId,
           deletedAt: null,
           status: 'active',
-          endDate: { not: null, gte: now, lte: soon }
+          endDate: { not: null, gte: currentDate, lte: soon }
         },
         orderBy: { endDate: 'asc' },
         take: 10

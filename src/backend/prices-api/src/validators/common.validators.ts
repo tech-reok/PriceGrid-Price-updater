@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isDateOnlyValue, isValidTimeZone } from '../common/utils/business-date';
 
 export const recordStatusSchema = z.enum(['active', 'inactive']);
 
@@ -29,12 +30,21 @@ export const currencyCodeSchema = z
 export const optionalText = (max: number) =>
   z.string().max(max).optional().nullable();
 
-/** Rejects an end date that is not strictly after the start date. */
+/** Parses a calendar date without allowing an implicit browser/server offset. */
+export const dateOnlySchema = z.string().refine(isDateOnlyValue, {
+  message: 'date must use the YYYY-MM-DD format'
+}).transform((value) => new Date(`${value}T00:00:00.000Z`));
+
+export const timeZoneSchema = z.string().trim().min(1).max(64).refine(isValidTimeZone, {
+  message: 'timeZone must be a valid IANA time-zone identifier'
+});
+
+/** Rejects an end date before the start date; the same calendar day is valid. */
 export function withValidDateRange<T extends { startDate?: Date | null; endDate?: Date | null }>(
   data: T,
   ctx: z.RefinementCtx
 ): void {
-  if (data.startDate && data.endDate && data.endDate.getTime() <= data.startDate.getTime()) {
+  if (data.startDate && data.endDate && data.endDate.getTime() < data.startDate.getTime()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['endDate'],

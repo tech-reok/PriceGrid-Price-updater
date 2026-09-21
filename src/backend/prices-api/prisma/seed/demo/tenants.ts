@@ -8,6 +8,7 @@ export async function seedDemoTenant(prisma: any): Promise<any> {
       commercialName: DEMO_TENANT.commercialName,
       legalName: DEMO_TENANT.legalName,
       defaultCurrency: DEMO_TENANT.defaultCurrency,
+      timeZone: DEMO_TENANT.timeZone,
       notes: DEMO_TENANT.notes,
       status: 'active'
     },
@@ -16,6 +17,7 @@ export async function seedDemoTenant(prisma: any): Promise<any> {
       legalName: DEMO_TENANT.legalName,
       slug: DEMO_TENANT.slug,
       defaultCurrency: DEMO_TENANT.defaultCurrency,
+      timeZone: DEMO_TENANT.timeZone,
       notes: DEMO_TENANT.notes,
       status: 'active',
       createdByType: 'system',

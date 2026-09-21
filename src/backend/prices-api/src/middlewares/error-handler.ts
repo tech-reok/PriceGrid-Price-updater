@@ -55,6 +55,11 @@ export function errorHandler(
     message = error.message;
     details = error.details;
     logLevel = error.statusCode >= 500 ? 'error' : 'warn';
+  } else if (typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002') {
+    statusCode = 409;
+    code = 'UNIQUE_CONSTRAINT';
+    message = 'A record with the same unique value already exists';
+    logLevel = 'warn';
   } else if (error instanceof Error) {
     message = env.isProduction ? 'Unexpected error' : error.message;
   }

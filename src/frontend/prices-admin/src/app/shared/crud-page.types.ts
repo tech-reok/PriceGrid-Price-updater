@@ -44,6 +44,8 @@ export interface ColumnConfig {
   key: string;
   label: string;
   type?: ColumnType;
+  /** Format a database calendar date without applying the browser time zone. */
+  dateOnly?: boolean;
   /** Column holding the currency code for `money` columns. */
   currencyKey?: string;
   align?: 'left' | 'right';

@@ -25,6 +25,7 @@ import {
   updateApiKeySchema,
   updateRoleSchema,
   updateTenantSchema,
+  updateTenantTimeZoneSchema,
   updateUserSchema
 } from '../validators/access.validators';
 import {
@@ -65,6 +66,23 @@ export function createAdminRouter(): Router {
   const tenantController = container.resolve<TenantController>(TOKENS.TenantController);
   const tenantRouter = Router();
   tenantRouter.get('/me', jwtAuth, resolveTenant, requireTenantContext, tenantController.me);
+  tenantRouter.get(
+    '/me/time-zone',
+    jwtAuth,
+    resolveTenant,
+    requireTenantContext,
+    requirePermission('settings:read'),
+    tenantController.timeZone
+  );
+  tenantRouter.patch(
+    '/me/time-zone',
+    jwtAuth,
+    resolveTenant,
+    requireTenantContext,
+    requirePermission('settings:update'),
+    validate(updateTenantTimeZoneSchema),
+    tenantController.updateTimeZone
+  );
   tenantRouter.get('/', jwtAuth, requireGlobalAdmin, requirePermission('tenants:read'), tenantController.list);
   tenantRouter.get('/:id', jwtAuth, requireGlobalAdmin, requirePermission('tenants:read'), tenantController.get);
   tenantRouter.post(

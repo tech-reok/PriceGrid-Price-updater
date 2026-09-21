@@ -10,7 +10,7 @@ import {
 import { PriceService } from '../../core/services/price.service';
 import { SessionStore } from '../../core/services/session.store';
 import { currencyOptionLoader, idOptionLoader, staticOptions } from '../../core/utils/options';
-import { formatMoney, toDateInputValue } from '../../core/utils/format';
+import { formatMoney, toDateOnlyInputValue } from '../../core/utils/format';
 import type {
   ColumnConfig,
   FieldConfig,
@@ -58,7 +58,7 @@ export class PricesComponent {
     { key: 'marketplace.name', label: 'Marketplace' },
     { key: 'basePrice', label: 'Precio base', type: 'money', currencyKey: 'currencyCode', align: 'right' },
     { key: 'finalPrice', label: 'Precio final', type: 'money', currencyKey: 'currencyCode', align: 'right' },
-    { key: 'startDate', label: 'Vigente desde', type: 'date' },
+    { key: 'startDate', label: 'Vigente desde', type: 'date', dateOnly: true },
     { key: 'status', label: 'Estado', type: 'status' }
   ];
 
@@ -106,8 +106,8 @@ export class PricesComponent {
     marketplaceId: row['marketplaceId'] ?? '',
     basePrice: row['basePrice'] ?? 0,
     currencyCode: row['currencyCode'] ?? 'MXN',
-    startDate: toDateInputValue(row['startDate']),
-    endDate: toDateInputValue(row['endDate']),
+    startDate: toDateOnlyInputValue(row['startDate']),
+    endDate: toDateOnlyInputValue(row['endDate']),
     status: row['status'] ?? 'active',
     notes: row['notes'] ?? ''
   });
@@ -124,10 +124,10 @@ export class PricesComponent {
     }
 
     if (values['startDate']) {
-      payload['startDate'] = new Date(String(values['startDate'])).toISOString();
+      payload['startDate'] = String(values['startDate']);
     }
     payload['endDate'] = values['endDate']
-      ? new Date(String(values['endDate'])).toISOString()
+      ? String(values['endDate'])
       : null;
     return payload;
   };

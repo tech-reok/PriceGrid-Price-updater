@@ -3,6 +3,8 @@ import { TOKENS } from '../di/tokens';
 import { CrudService } from '../common/crud/service';
 import { ValidationError } from '../common/errors';
 import type { TenantCrudRepository } from '../common/crud/repository';
+import { assertValidTimeZone } from '../common/utils/business-date';
+import type { ActorContext } from '../types';
 
 /**
  * Companies (tenants). Managed by the global admin; not tenant-scoped because
@@ -44,5 +46,10 @@ export class TenantService extends CrudService<any> {
   /** Current company for non-global users. */
   async current(id: string): Promise<any> {
     return this.get(null, id);
+  }
+
+  async updateTimeZone(id: string, timeZone: string, actor: ActorContext): Promise<any> {
+    assertValidTimeZone(timeZone);
+    return this.update(null, id, { timeZone }, actor);
   }
 }

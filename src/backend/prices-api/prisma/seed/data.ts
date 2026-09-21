@@ -176,6 +176,7 @@ export const DEMO_TENANT = {
   legalName: 'Demo Company S.A. de C.V.',
   slug: 'demo-company',
   defaultCurrency: 'MXN',
+  timeZone: 'America/Mexico_City',
   notes: 'Empresa inicial para desarrollo y pruebas'
 };
 

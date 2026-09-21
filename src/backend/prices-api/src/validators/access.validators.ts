@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { currencyCodeSchema, optionalText, recordStatusSchema } from './common.validators';
+import { currencyCodeSchema, optionalText, recordStatusSchema, timeZoneSchema } from './common.validators';
 
 /**
  * Request-body schemas are STRICT: unknown/extra fields are rejected with a
@@ -32,11 +32,16 @@ export const createTenantSchema = z
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug must be lowercase kebab-case'),
     status: recordStatusSchema.optional(),
     defaultCurrency: currencyCodeSchema,
+    timeZone: timeZoneSchema.default('UTC'),
     notes: optionalText(2000)
   })
   .strict();
 
 export const updateTenantSchema = createTenantSchema.partial();
+
+export const updateTenantTimeZoneSchema = z
+  .object({ timeZone: timeZoneSchema })
+  .strict();
 
 // --- Users -----------------------------------------------------------------
 

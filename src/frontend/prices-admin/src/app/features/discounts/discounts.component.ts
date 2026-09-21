@@ -9,7 +9,7 @@ import {
 } from '../../core/services/catalog.services';
 import { SessionStore } from '../../core/services/session.store';
 import { idOptionLoader, staticOptions } from '../../core/utils/options';
-import { toDateInputValue } from '../../core/utils/format';
+import { toDateOnlyInputValue } from '../../core/utils/format';
 import { zodValidator } from '../../core/utils/validation';
 import type { ColumnConfig, FieldConfig } from '../../shared/crud-page.types';
 
@@ -63,7 +63,7 @@ const discountFormSchema = z
       });
     }
 
-    if (data.endDate && new Date(data.endDate) <= new Date(data.startDate)) {
+    if (data.endDate && new Date(data.endDate) < new Date(data.startDate)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['endDate'],
@@ -109,8 +109,8 @@ export class DiscountsComponent {
     { key: 'value', label: 'Valor', align: 'right' },
     { key: 'appliesTo', label: 'Aplica a' },
     { key: 'priority', label: 'Prioridad', align: 'right' },
-    { key: 'startDate', label: 'Inicio', type: 'date' },
-    { key: 'endDate', label: 'Fin', type: 'date' },
+    { key: 'startDate', label: 'Inicio', type: 'date', dateOnly: true },
+    { key: 'endDate', label: 'Fin', type: 'date', dateOnly: true },
     { key: 'status', label: 'Estado', type: 'status' }
   ];
 
@@ -162,7 +162,7 @@ export class DiscountsComponent {
       visibleWhen: { key: 'appliesTo', equals: 'marketplace' }
     },
     { key: 'startDate', label: 'Fecha de inicio', type: 'date', required: true },
-    { key: 'endDate', label: 'Fecha de fin', type: 'date', help: 'Opcional.' },
+    { key: 'endDate', label: 'Fecha de fin', type: 'date', help: 'Opcional. Incluye todo el día seleccionado.' },
     { key: 'priority', label: 'Prioridad', type: 'number', min: 0, defaultValue: 100, help: 'Menor valor = mayor prioridad.' },
     {
       key: 'status',
@@ -190,8 +190,8 @@ export class DiscountsComponent {
     productId: row['productId'] ?? '',
     priceListId: row['priceListId'] ?? '',
     marketplaceId: row['marketplaceId'] ?? '',
-    startDate: toDateInputValue(row['startDate']),
-    endDate: toDateInputValue(row['endDate']),
+    startDate: toDateOnlyInputValue(row['startDate']),
+    endDate: toDateOnlyInputValue(row['endDate']),
     priority: row['priority'] ?? 100,
     status: (row['status'] ?? 'active') === 'active',
     description: row['description'] ?? ''
@@ -205,8 +205,8 @@ export class DiscountsComponent {
     productId: values['appliesTo'] === 'product' ? values['productId'] || null : null,
     priceListId: values['appliesTo'] === 'price_list' ? values['priceListId'] || null : null,
     marketplaceId: values['appliesTo'] === 'marketplace' ? values['marketplaceId'] || null : null,
-    startDate: values['startDate'] ? new Date(String(values['startDate'])).toISOString() : null,
-    endDate: values['endDate'] ? new Date(String(values['endDate'])).toISOString() : null,
+    startDate: values['startDate'] ? String(values['startDate']) : null,
+    endDate: values['endDate'] ? String(values['endDate']) : null,
     priority: Number(values['priority'] ?? 100),
     status: values['status'] ? 'active' : 'inactive',
     description: values['description'] || null

@@ -94,6 +94,7 @@ describe('TenantController', () => {
       list: jest.fn().mockResolvedValue({ data: [{ id: 't1' }], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } }),
       get: jest.fn().mockResolvedValue({ id: 't1' }),
       current: jest.fn().mockResolvedValue({ id: 't1' }),
+      updateTimeZone: jest.fn().mockResolvedValue({ id: 't1', timeZone: 'America/Mexico_City' }),
       create: jest.fn().mockResolvedValue({ id: 't-new' }),
       update: jest.fn().mockResolvedValue({ id: 't1', commercialName: 'Updated' }),
       remove: jest.fn().mockResolvedValue({ id: 't1', deletedAt: 'x' })
@@ -127,6 +128,18 @@ describe('TenantController', () => {
     req.tenantId = null;
 
     expect(await runHandler(controller.me, req, mockResponse())).toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('reads and updates the selected company time zone only through context', async () => {
+    const { tenantService, controller } = build();
+    const req = mockRequest({ body: { timeZone: 'America/Mexico_City' } });
+    req.tenantId = 't1';
+
+    await runHandler(controller.timeZone, req, mockResponse());
+    expect(tenantService.current).toHaveBeenCalledWith('t1');
+
+    await runHandler(controller.updateTimeZone, req, mockResponse());
+    expect(tenantService.updateTimeZone).toHaveBeenCalledWith('t1', 'America/Mexico_City', expect.anything());
   });
 
   it('creates, updates and removes companies', async () => {

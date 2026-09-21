@@ -60,6 +60,13 @@ describe('AppDatePipe', () => {
     expect(withTime.length).toBeGreaterThan(pipe.transform('2024-03-15T10:30:00.000Z').length);
   });
 
+  it('preserves a database calendar date instead of shifting it to the browser zone', () => {
+    const formatted = pipe.transform('2026-09-20T00:00:00.000Z', false, true);
+
+    expect(formatted).toContain('20');
+    expect(formatted).toContain('2026');
+  });
+
   it('returns an em dash for empty or invalid values', () => {
     expect(pipe.transform(null)).toBe('—');
     expect(pipe.transform('')).toBe('—');

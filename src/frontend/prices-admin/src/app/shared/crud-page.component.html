@@ -124,7 +124,7 @@
                         }}</span>
                       }
                       @case ('date') {
-                        {{ asStatus(cell(row, column)) | appDate }}
+                        {{ asStatus(cell(row, column)) | appDate: false : column.dateOnly }}
                       }
                       @case ('boolean') {
                         {{ cell(row, column) ? 'Sí' : 'No' }}

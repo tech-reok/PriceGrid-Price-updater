@@ -97,7 +97,7 @@
             <li class="py-2.5 flex items-center justify-between gap-4 text-sm">
               <span class="font-medium text-forest">{{ discount.name }}</span>
               <span class="text-olive text-xs">
-                Vence {{ discount.endDate | appDate }} ·
+                Vence {{ discount.endDate | appDate: false : true }} ·
                 {{ discount.type === 'percentage' ? discount.value + '%' : (discount.value | money) }}
               </span>
             </li>

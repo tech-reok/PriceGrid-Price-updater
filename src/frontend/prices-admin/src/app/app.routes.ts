@@ -103,6 +103,7 @@ export const routes: Routes = [
 
       {
         path: 'settings',
+        canActivate: [tenantGuard, permissionGuard('settings:read')],
         loadComponent: () =>
           import('./features/settings/settings.component').then((m) => m.SettingsComponent)
       },

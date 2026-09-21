@@ -13,6 +13,8 @@
  * `createdAt ASC`, then `id ASC` for a fully deterministic tie-break.
  */
 
+import { isBusinessDateWithinRange } from '../common/utils/business-date';
+
 export type DiscountScopeName = 'product' | 'price_list' | 'marketplace';
 
 export const DISCOUNT_SCOPE_PRECEDENCE: readonly DiscountScopeName[] = [
@@ -79,15 +81,14 @@ export function roundTo(value: number, decimals: number): number {
 
 export function isWithinValidity(
   discount: Pick<DiscountLike, 'startDate' | 'endDate'>,
-  now: Date
+  now: Date,
+  timeZone = 'UTC'
 ): boolean {
-  const startsOk = discount.startDate.getTime() <= now.getTime();
-  const endsOk = !discount.endDate || discount.endDate.getTime() >= now.getTime();
-  return startsOk && endsOk;
+  return isBusinessDateWithinRange(discount.startDate, discount.endDate, now, timeZone);
 }
 
-export function isDiscountApplicable(discount: DiscountLike, now: Date): boolean {
-  return discount.status === 'active' && isWithinValidity(discount, now);
+export function isDiscountApplicable(discount: DiscountLike, now: Date, timeZone = 'UTC'): boolean {
+  return discount.status === 'active' && isWithinValidity(discount, now, timeZone);
 }
 
 export function matchesScope(
@@ -125,9 +126,10 @@ export function sortByPriority(candidates: DiscountLike[]): DiscountLike[] {
 export function selectApplicableDiscount(
   discounts: DiscountLike[],
   context: PricingContext,
-  now: Date = new Date()
+  now: Date = new Date(),
+  timeZone = 'UTC'
 ): { discount: DiscountLike; scope: DiscountScopeName } | null {
-  const applicable = discounts.filter((discount) => isDiscountApplicable(discount, now));
+  const applicable = discounts.filter((discount) => isDiscountApplicable(discount, now, timeZone));
 
   for (const scope of DISCOUNT_SCOPE_PRECEDENCE) {
     const candidates = applicable.filter((discount) => matchesScope(discount, scope, context));
@@ -158,11 +160,11 @@ export function applyDiscountToPrice(
 export function calculateFinalPrice(
   context: PricingContext,
   discounts: DiscountLike[],
-  options: { now?: Date; floor?: number } = {}
+  options: { now?: Date; floor?: number; timeZone?: string } = {}
 ): PricingResult {
   const now = options.now ?? new Date();
   const floor = options.floor ?? DEFAULT_PRICE_FLOOR;
-  const selection = selectApplicableDiscount(discounts, context, now);
+  const selection = selectApplicableDiscount(discounts, context, now, options.timeZone ?? 'UTC');
 
   if (!selection) {
     return {

@@ -4,6 +4,7 @@ import { CrudService } from '../common/crud/service';
 import { ValidationError } from '../common/errors';
 import { auditCreateFields, auditUpdateFields } from '../common/utils/audit';
 import { assertReferencesBelongToTenant } from '../common/utils/tenant-references';
+import { resolveTenantTimeZone } from '../common/utils/tenant-time-zone';
 import { calculateFinalPrice, type PricingResult } from './pricing.engine';
 import type { TenantCrudRepository } from '../common/crud/repository';
 import type { ActorContext } from '../types';
@@ -82,6 +83,7 @@ export class PriceService extends CrudService<any> {
 
     const decimals = await this.decimalsFor(input.currencyCode);
     const discounts = await this.discountRepository.findMany(tenantId, { status: 'active' });
+    const timeZone = await resolveTenantTimeZone(this.prisma, tenantId);
 
     return calculateFinalPrice(
       {
@@ -92,7 +94,7 @@ export class PriceService extends CrudService<any> {
         currencyDecimals: decimals
       },
       discounts as any,
-      { now: input.at ?? new Date() }
+      { now: input.at ?? new Date(), timeZone }
     );
   }
 

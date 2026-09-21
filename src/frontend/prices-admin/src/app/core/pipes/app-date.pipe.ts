@@ -1,9 +1,9 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
-/** Formats an ISO timestamp for display; em dash when empty. */
+/** Formats timestamps or database calendar dates for display; em dash when empty. */
 @Pipe({ name: 'appDate', standalone: true })
 export class AppDatePipe implements PipeTransform {
-  transform(value: string | Date | null | undefined, withTime = false): string {
+  transform(value: string | Date | null | undefined, withTime = false, dateOnly = false): string {
     if (!value) return '—';
 
     const date = value instanceof Date ? value : new Date(value);
@@ -13,6 +13,7 @@ export class AppDatePipe implements PipeTransform {
       year: 'numeric',
       month: 'short',
       day: '2-digit',
+      ...(dateOnly ? { timeZone: 'UTC' } : {}),
       ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {})
     }).format(date);
 

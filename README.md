@@ -21,6 +21,7 @@ API keys and scopes are the foundation for it.
 - [Frontend: install and run](#frontend-install-and-run)
 - [Environment variables](#environment-variables)
 - [Business rules: pricing and discounts](#business-rules-pricing-and-discounts)
+- [Tenant time zones and business dates](#tenant-time-zones-and-business-dates)
 - [Multi-tenancy and authentication](#multi-tenancy-and-authentication)
 - [API reference](#api-reference)
 - [Testing](#testing)
@@ -290,6 +291,15 @@ final = max(final, 0)                       # configurable floor
 final = round(final, currency.decimals)     # currency-aware rounding
 ```
 
+### Tenant time zones and validity dates
+
+Validity dates are business-calendar dates, not UTC instants. The API accepts
+`YYYY-MM-DD` for price and discount validity fields and stores them in MySQL
+`DATE` columns. For a tenant configured as `America/Mexico_City`, a discount
+with `startDate = endDate = 2026-09-19` remains active for that company's full
+local day and expires at its next local midnight. This rule is shared by the
+admin preview, catalog, dashboard and export worker.
+
 Every change to a price's base or final value writes an **append-only** `price_history`
 row in the same transaction, recording old/new values, the reason and the actor
 (`user` or `api_key`).
@@ -386,6 +396,24 @@ Every write stamps `created_by` / `created_by_type` and `updated_by` / `updated_
   object-storage implementation through the export storage adapter. Jobs expire
   after `EXPORT_RETENTION_HOURS` (24 hours by default).
 
+**Tenant time zones and business dates**
+
+- Each company stores an IANA time-zone identifier in `tenants.time_zone`; new
+  companies default to `UTC` and demo data uses `America/Mexico_City`.
+- Company administrators can change the selected zone from **Settings** when
+  their role has `settings:update`. The frontend shows the current local
+  business time and searchable IANA zones with their current UTC offset.
+- `GET /api/v1/tenants/me/time-zone` reads the selected company zone and
+  `PATCH /api/v1/tenants/me/time-zone` updates it using the resolved tenant
+  context. A tenant id is never accepted for this operation.
+- Price and discount `startDate` / `endDate` values are calendar dates stored
+  as MySQL `DATE`, submitted as `YYYY-MM-DD`, and evaluated inclusively in the
+  company's zone. A same-day discount applies from local `00:00:00` through
+  local `23:59:59.999`.
+- Pricing, catalog, preview, dashboard expiration windows and queued exports
+  share the same business-date calculation. The backend uses the Node.js ICU
+  `Intl` time-zone database, so no fixed-offset arithmetic is used.
+
 ---
 
 ## API reference
@@ -407,7 +435,7 @@ Base path `/api/v1`. List endpoints accept
 
 | Resource | Endpoints |
 |----------|-----------|
-| Companies | `GET/POST /tenants`, `GET/PATCH/DELETE /tenants/:id`, `GET /tenants/me` *(global admin)* |
+| Companies | `GET/POST /tenants`, `GET/PATCH/DELETE /tenants/:id`, `GET /tenants/me`, `GET/PATCH /tenants/me/time-zone` |
 | Users | `GET/POST /users`, `GET/PATCH/DELETE /users/:id` |
 | Roles | `GET/POST /roles`, `GET/PATCH/DELETE /roles/:id`, `GET/PUT /roles/:id/permissions` |
 | Permissions | `GET /permissions`, `GET /permissions/:id` *(read-only)* |

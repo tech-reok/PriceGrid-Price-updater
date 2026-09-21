@@ -1,7 +1,7 @@
 import { inject, injectable } from 'tsyringe';
 import { TOKENS } from '../di/tokens';
 import { CrudService } from '../common/crud/service';
-import { ValidationError } from '../common/errors';
+import { ConflictError, ValidationError } from '../common/errors';
 import { assertReferencesBelongToTenant } from '../common/utils/tenant-references';
 import type { TenantCrudRepository } from '../common/crud/repository';
 import type { ActorContext } from '../types';
@@ -28,6 +28,17 @@ export class DiscountService extends CrudService<any> {
     @inject(TOKENS.MarketplaceRepository) private readonly marketplaceRepository: TenantCrudRepository<any>
   ) {
     super(repository, 'Discount');
+  }
+
+  private async assertNameAvailable(tenantId: string | null, name: string, id?: string): Promise<void> {
+    const existing = await this.repository.client.discount.findFirst({ where: { tenantId, name } });
+    if (existing && existing.id !== id) {
+      throw new ConflictError('A discount with that name already exists in this company', 'DISCOUNT_NAME_TAKEN');
+    }
+  }
+
+  private normalizeName(data: Record<string, unknown>): Record<string, unknown> {
+    return typeof data.name === 'string' ? { ...data, name: data.name.trim() } : data;
   }
 
   private normalizeScopeData(data: Record<string, unknown>, scope: ScopeState): Record<string, unknown> {
@@ -101,15 +112,17 @@ export class DiscountService extends CrudService<any> {
     data: Record<string, unknown>,
     actor: ActorContext
   ): Promise<any> {
+    const normalizedData = this.normalizeName(data);
+    await this.assertNameAvailable(tenantId, String(normalizedData.name ?? ''));
     const scope: ScopeState = {
-      appliesTo: String(data.appliesTo),
-      productId: (data.productId as string) ?? null,
-      priceListId: (data.priceListId as string) ?? null,
-      marketplaceId: (data.marketplaceId as string) ?? null
+      appliesTo: String(normalizedData.appliesTo),
+      productId: (normalizedData.productId as string) ?? null,
+      priceListId: (normalizedData.priceListId as string) ?? null,
+      marketplaceId: (normalizedData.marketplaceId as string) ?? null
     };
     await this.assertScopeBelongsToTenant(tenantId, scope);
 
-    return super.create(tenantId, this.normalizeScopeData(data, scope), actor);
+    return super.create(tenantId, this.normalizeScopeData(normalizedData, scope), actor);
   }
 
   override async update(
@@ -119,12 +132,16 @@ export class DiscountService extends CrudService<any> {
     actor: ActorContext
   ): Promise<any> {
     const existing = await this.get(tenantId, id);
+    const normalizedData = this.normalizeName(data);
+    if (normalizedData.name !== undefined) {
+      await this.assertNameAvailable(tenantId, String(normalizedData.name), id);
+    }
 
     // Merge the partial payload with the stored scope before validating.
-    const appliesTo = (data.appliesTo as string) ?? existing.appliesTo;
-    const scopeChanged = data.appliesTo !== undefined && data.appliesTo !== existing.appliesTo;
+    const appliesTo = (normalizedData.appliesTo as string) ?? existing.appliesTo;
+    const scopeChanged = normalizedData.appliesTo !== undefined && normalizedData.appliesTo !== existing.appliesTo;
     const fieldValue = (field: 'productId' | 'priceListId' | 'marketplaceId'): string | null => {
-      if (data[field] !== undefined) return (data[field] as string) ?? null;
+      if (normalizedData[field] !== undefined) return (normalizedData[field] as string) ?? null;
       if (scopeChanged) return null;
       return existing[field] ?? null;
     };
@@ -137,6 +154,6 @@ export class DiscountService extends CrudService<any> {
 
     await this.assertScopeBelongsToTenant(tenantId, effective);
 
-    return super.update(tenantId, id, this.normalizeScopeData(data, effective), actor);
+    return super.update(tenantId, id, this.normalizeScopeData(normalizedData, effective), actor);
   }
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   currencyCodeSchema,
+  dateOnlySchema,
   optionalText,
   recordStatusSchema,
   withValidDateRange
@@ -67,8 +68,8 @@ export const createPriceSchema = z
     marketplaceId: z.string().uuid(),
     basePrice: z.coerce.number().nonnegative('basePrice must be >= 0'),
     currencyCode: currencyCodeSchema,
-    startDate: z.coerce.date(),
-    endDate: z.coerce.date().optional().nullable(),
+    startDate: dateOnlySchema,
+    endDate: dateOnlySchema.optional().nullable(),
     status: recordStatusSchema.optional(),
     notes: optionalText(2000)
   })
@@ -80,8 +81,8 @@ export const updatePriceSchema = z
   .object({
     basePrice: z.coerce.number().nonnegative().optional(),
     currencyCode: currencyCodeSchema.optional(),
-    startDate: z.coerce.date().optional(),
-    endDate: z.coerce.date().optional().nullable(),
+    startDate: dateOnlySchema.optional(),
+    endDate: dateOnlySchema.optional().nullable(),
     status: recordStatusSchema.optional(),
     notes: optionalText(2000)
   })
@@ -116,8 +117,8 @@ export const createDiscountSchema = z
     productId: z.string().uuid().optional().nullable(),
     priceListId: z.string().uuid().optional().nullable(),
     marketplaceId: z.string().uuid().optional().nullable(),
-    startDate: z.coerce.date(),
-    endDate: z.coerce.date().optional().nullable(),
+    startDate: dateOnlySchema,
+    endDate: dateOnlySchema.optional().nullable(),
     priority: z.coerce.number().int().nonnegative().optional(),
     status: recordStatusSchema.optional(),
     description: optionalText(2000)
@@ -164,8 +165,8 @@ export const updateDiscountSchema = z
     productId: z.string().uuid().optional().nullable(),
     priceListId: z.string().uuid().optional().nullable(),
     marketplaceId: z.string().uuid().optional().nullable(),
-    startDate: z.coerce.date().optional(),
-    endDate: z.coerce.date().optional().nullable(),
+    startDate: dateOnlySchema.optional(),
+    endDate: dateOnlySchema.optional().nullable(),
     priority: z.coerce.number().int().nonnegative().optional(),
     status: recordStatusSchema.optional(),
     description: optionalText(2000)

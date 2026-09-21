@@ -126,7 +126,7 @@ describe('PricesComponent logic', () => {
       { isEditing: false }
     );
 
-    expect(payload['startDate']).toBe(new Date('2024-01-01').toISOString());
+    expect(payload['startDate']).toBe('2024-01-01');
     expect(payload['endDate']).toBeNull();
     // References are required to create a price.
     expect(payload['productId']).toBe('p1');
@@ -151,7 +151,7 @@ describe('PricesComponent logic', () => {
       { startDate: '2024-01-01', endDate: '2024-02-01' },
       { isEditing: false }
     );
-    expect(payload['endDate']).toBe(new Date('2024-02-01').toISOString());
+    expect(payload['endDate']).toBe('2024-02-01');
   });
 
   it('builds preview results including the applied discount', (done) => {
