@@ -2,15 +2,19 @@
 // both catalogs. A missing key renders as a raw key in the UI, which the
 // Spanish-copy scan cannot detect.
 //
-// Usage: node agent/i18n/check-keys.mjs
+// Usage: node tools/i18n/check-keys.mjs
+//
+// Paths are derived from this script's own location, so the file works when the
+// command is launched from the frontend package, the repository root, an IDE
+// task or a CI runner.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const APP = join(REPO_ROOT, 'src', 'frontend', 'prices-admin', 'src', 'app');
-const I18N = join(REPO_ROOT, 'src', 'frontend', 'prices-admin', 'src', 'app', 'core', 'i18n', 'catalogs');
+const FRONTEND_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const APP = join(FRONTEND_ROOT, 'src', 'app');
+const I18N = join(APP, 'core', 'i18n', 'catalogs');
 
 const SKIP = [/\.spec\.ts$/, /[\\/]testing[\\/]/];
 

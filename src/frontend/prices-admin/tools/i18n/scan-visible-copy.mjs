@@ -6,7 +6,7 @@
 // key, but the primary target is Spanish, since that is what used to be
 // hard-coded.
 //
-// Usage: node agent/i18n/scan-visible-copy.mjs [--verbose]
+// Usage: node tools/i18n/scan-visible-copy.mjs [--verbose]
 //
 // Exit code 0 = clean, 1 = violations found.
 
@@ -14,9 +14,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Repo root, derived from this script's location so it runs from anywhere. */
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ROOT = join(REPO_ROOT, 'src', 'frontend', 'prices-admin', 'src', 'app');
+/** Frontend package root, derived from this script's location so it runs from anywhere. */
+const FRONTEND_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const ROOT = join(FRONTEND_ROOT, 'src', 'app');
 const VERBOSE = process.argv.includes('--verbose');
 
 /** Files that are allowed to contain copy by design. */
