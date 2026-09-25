@@ -295,6 +295,7 @@ Latin American Spanish (`es-419`, the default) and US English (`en-US`).
 | API error → localized copy | `core/i18n/api-error-localizer.service.ts` |
 | Header selector | `shared/language-selector.component.ts` |
 | Backend allowlist and `users.preferred_locale` | `src/backend/prices-api/src/common/i18n/supported-locales.ts` |
+| Quality guards (copy scan + key coverage) | `src/frontend/prices-admin/tools/i18n/` |
 
 Resolution order: the authenticated user's stored preference → the locale cached
 in the browser for the login screen → `navigator.languages` → `es-419`.
@@ -364,7 +365,8 @@ npm test                # unit tests, including catalog parity
 npm run build           # AOT type-checks every template binding
 ```
 
-`i18n:check` runs two guards that live in `agent/i18n/`:
+`i18n:check` runs two guards that live in
+`src/frontend/prices-admin/tools/i18n/`:
 
 - `scan-visible-copy.mjs` fails when user-visible Spanish copy is still embedded
   in production source. Its whitelist is empty on purpose; add an entry only with
@@ -373,6 +375,14 @@ npm run build           # AOT type-checks every template binding
   it exists in **both** locales. A misspelt key is invisible to the Spanish scan
   and would render as `common.actions` in the UI, which is why this second guard
   exists.
+
+Both scripts derive their paths from their own location, so they can also be run
+directly (from the frontend directory or the repository root):
+
+```bash
+node tools/i18n/check-keys.mjs
+node tools/i18n/scan-visible-copy.mjs [--verbose]
+```
 
 ### Adding a third locale
 

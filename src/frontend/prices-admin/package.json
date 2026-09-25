@@ -9,8 +9,8 @@
     "test": "ng test --watch=false --browsers=ChromeHeadlessCI",
     "test:watch": "ng test --browsers=ChromeHeadlessCI",
     "test:coverage": "ng test --watch=false --browsers=ChromeHeadlessCI --code-coverage",
-    "i18n:scan": "node ../../../agent/i18n/scan-visible-copy.mjs",
-    "i18n:keys": "node ../../../agent/i18n/check-keys.mjs",
+    "i18n:scan": "node tools/i18n/scan-visible-copy.mjs",
+    "i18n:keys": "node tools/i18n/check-keys.mjs",
     "i18n:check": "npm run i18n:scan && npm run i18n:keys"
   },
   "private": true,
