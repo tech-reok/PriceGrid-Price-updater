@@ -5,6 +5,7 @@ import { By } from '@angular/platform-browser';
 import { Subject, of, throwError } from 'rxjs';
 import { CrudPageComponent } from './crud-page.component';
 import { ToastService } from '../core/services/toast.service';
+import { TenantContextService } from '../core/services/tenant-context.service';
 import { LanguageService } from '../core/i18n/language.service';
 import type { CrudResource } from '../core/services/crud-resource';
 import type { ColumnConfig, CrudMessages, FieldConfig, RowAction } from './crud-page.types';
@@ -457,5 +458,221 @@ describe('CrudPageComponent', () => {
 
     expect(page.visibleFields().length).toBe(2);
     expect(page.visibleRowActions({ id: 'p1' }).length).toBe(1);
+  });
+});
+
+/**
+ * The autocomplete field type, on a host that declares an async source and an
+ * `initialOption`. Kept apart from the main host so the existing expectations
+ * about its two fields stay untouched.
+ */
+@Component({
+  standalone: true,
+  imports: [CrudPageComponent],
+  template: `
+    <app-crud-page
+      title="Precios"
+      entityLabel="precio"
+      [columns]="columns"
+      [fields]="fields"
+      [service]="service"
+      [asyncSelectSources]="asyncSelectSources"
+      [selectSources]="selectSources"
+      [mapToForm]="mapToForm"
+      [mapToPayload]="mapToPayload"
+      [canCreate]="true"
+      [canEdit]="true"
+    />
+  `
+})
+class AutocompleteHostComponent {
+  service: CrudResource<any> = new FakeResource() as unknown as CrudResource<any>;
+  columns: ColumnConfig[] = [{ key: 'product.name', label: { text: 'Producto' } }];
+
+  asyncCalls: string[] = [];
+
+  fields: FieldConfig[] = [
+    {
+      key: 'productId',
+      label: { text: 'Producto' },
+      type: 'autocomplete',
+      required: true,
+      asyncOptionsKey: 'products',
+      placeholder: { text: 'Buscar por SKU o nombre…' },
+      disabledOnEdit: true,
+      initialOption: (row) =>
+        row?.['product']
+          ? { value: row['product'].id, label: { text: `${row['product'].sku} — ${row['product'].name}` } }
+          : null
+    }
+  ];
+
+  selectSources = {
+    priceLists: jasmine
+      .createSpy('priceLists')
+      .and.returnValue(of([{ value: 'list-1', label: { text: 'Retail' } }]))
+  };
+
+  asyncSelectSources = {
+    products: (term: string) => {
+      this.asyncCalls.push(term);
+      return of([{ value: 'prod-1', label: { text: 'CAFE-1000 — Cafetera' } }]);
+    }
+  };
+
+  mapToForm = (row: Record<string, any>): Record<string, unknown> => ({
+    productId: row['productId'] ?? ''
+  });
+
+  mapToPayload = (values: Record<string, unknown>, context: { isEditing: boolean }) => {
+    const payload = { ...values };
+    if (context.isEditing) delete payload['productId'];
+    return payload;
+  };
+}
+
+describe('CrudPageComponent — autocomplete field', () => {
+  let fixture: ComponentFixture<AutocompleteHostComponent>;
+  let host: AutocompleteHostComponent;
+  let page: CrudPageComponent;
+
+  beforeEach(async () => {
+    window.localStorage.clear();
+    await TestBed.configureTestingModule({
+      imports: [AutocompleteHostComponent, provideTranslocoTesting()]
+    }).compileComponents();
+
+    installTestTranslations();
+    fixture = TestBed.createComponent(AutocompleteHostComponent);
+    host = fixture.componentInstance;
+    TestBed.inject(ToastService).clear();
+  });
+
+  afterEach(() => {
+    fixture.destroy();
+    document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove());
+    window.localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  function create(): void {
+    fixture.detectChanges();
+    page = fixture.debugElement.query(By.directive(CrudPageComponent)).componentInstance;
+  }
+
+  function input(): HTMLInputElement {
+    return fixture.nativeElement.querySelector('[data-testid="autocomplete-productId"]') as HTMLInputElement;
+  }
+
+  it('renders an autocomplete control instead of a select', () => {
+    create();
+    page.openCreate();
+    fixture.detectChanges();
+
+    const element = input();
+    expect(element).toBeTruthy();
+    expect(element.getAttribute('role')).toBe('combobox');
+    expect(element.placeholder).toBe('Buscar por SKU o nombre…');
+    expect(fixture.nativeElement.querySelector('select')).toBeNull();
+  });
+
+  it('does not query the catalog just by opening the create form', () => {
+    create();
+    page.openCreate();
+    fixture.detectChanges();
+
+    // The old implementation loaded 100 products on init; an async source must
+    // stay untouched until the user types.
+    expect(host.asyncCalls).toEqual([]);
+  });
+
+  it('keeps the eager select sources working alongside async ones', () => {
+    create();
+
+    expect(Object.keys(page.options())).toContain('priceLists');
+    expect(page.options()['priceLists']).toEqual([{ value: 'list-1', label: { text: 'Retail' } }]);
+  });
+
+  it('resolves the initial option from the edited row and disables the field', () => {
+    create();
+    const row = {
+      id: 'price-1',
+      productId: 'prod-9',
+      product: { id: 'prod-9', sku: 'SKU-9', name: 'Antiguo' }
+    };
+
+    page.openEdit(row);
+    fixture.detectChanges();
+
+    expect(page.initialOptionFor(host.fields[0])).toEqual({
+      value: 'prod-9',
+      label: { text: 'SKU-9 — Antiguo' }
+    });
+
+    // The control keeps its value even though it cannot be edited.
+    expect(page.form.get('productId')?.disabled).toBe(true);
+    expect(page.form.get('productId')?.value).toBe('prod-9');
+    expect(page.form.getRawValue()['productId']).toBe('prod-9');
+    expect(input().value).toBe('SKU-9 — Antiguo');
+  });
+
+  it('never submits an edited product reference', () => {
+    create();
+    page.openEdit({ id: 'price-1', productId: 'prod-9', product: { id: 'prod-9', sku: 'SKU-9', name: 'Antiguo' } });
+    fixture.detectChanges();
+
+    page.submit();
+
+    const update = (host.service as unknown as FakeResource).update;
+    expect(update).toHaveBeenCalled();
+    const payload = update.calls.mostRecent().args[1] as Record<string, unknown>;
+    expect(Object.keys(payload)).not.toContain('productId');
+  });
+
+  it('blocks submission while a required autocomplete has no selection', () => {
+    create();
+    page.openCreate();
+    fixture.detectChanges();
+
+    page.submit();
+
+    expect((host.service as unknown as FakeResource).create).not.toHaveBeenCalled();
+    expect(page.form.get('productId')?.invalid).toBe(true);
+  });
+
+  it('marks the control dirty and touched when an option is selected', () => {
+    create();
+    page.openCreate();
+    fixture.detectChanges();
+
+    const control = page.form.get('productId');
+    expect(control?.dirty).toBe(false);
+
+    page.onAutocompleteSelected(host.fields[0]);
+
+    expect(control?.dirty).toBe(true);
+    expect(control?.touched).toBe(true);
+  });
+
+  it('clears the option cache and closes the modal when the company changes', () => {
+    create();
+    page.openCreate();
+    fixture.detectChanges();
+    expect(page.modalOpen()).toBe(true);
+    expect(Object.keys(page.options()).length).toBeGreaterThan(0);
+
+    const loader = host.selectSources.priceLists as jasmine.Spy;
+    expect(loader).toHaveBeenCalledTimes(1);
+
+    // A global administrator switching company must not keep the previous
+    // company's cached options, nor an open form referencing them.
+    TestBed.inject(TenantContextService).select('tenant-2');
+    fixture.detectChanges();
+
+    expect(page.modalOpen()).toBe(false);
+    expect(page.initialOptions()).toEqual({});
+    // The eager sources are re-run, so the options belong to the new company.
+    expect(loader).toHaveBeenCalledTimes(2);
+    expect(page.options()['priceLists']).toEqual([{ value: 'list-1', label: { text: 'Retail' } }]);
   });
 });

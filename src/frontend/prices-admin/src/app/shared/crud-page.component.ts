@@ -16,6 +16,7 @@ import { ModalComponent } from './modal.component';
 import { StatePanelComponent } from './state-panel.component';
 import { StatusBadgeComponent } from './status-badge.component';
 import { SwitchComponent } from './ui/switch.component';
+import { AsyncAutocompleteComponent } from './ui/async-autocomplete.component';
 import { DisplayTextPipe } from './display-text.pipe';
 import { MoneyPipe } from '../core/pipes/money.pipe';
 import { AppDatePipe } from '../core/pipes/app-date.pipe';
@@ -28,6 +29,7 @@ import { EMPTY_TEXT } from './crud-page.types';
 import type { CrudResource } from '../core/services/crud-resource';
 import type { PageMeta } from '../core/models';
 import type {
+  AsyncOptionLoader,
   ColumnConfig,
   CrossValidator,
   CrudMessages,
@@ -73,6 +75,7 @@ const STATUS_CHIPS: FieldOption[] = [
     StatePanelComponent,
     StatusBadgeComponent,
     SwitchComponent,
+    AsyncAutocompleteComponent,
     DisplayTextPipe,
     MoneyPipe,
     AppDatePipe
@@ -104,6 +107,12 @@ export class CrudPageComponent implements OnInit {
   readonly searchPlaceholder = input<DisplayText>({ key: 'common.search' });
   readonly emptyMessage = input<DisplayText>(EMPTY_TEXT);
   readonly selectSources = input<Record<string, OptionLoader>>({});
+  /**
+   * Query-aware sources for `autocomplete` fields, keyed by
+   * `FieldConfig.asyncOptionsKey`. Kept apart from `selectSources` so the eager
+   * loaders keep their current behaviour.
+   */
+  readonly asyncSelectSources = input<Record<string, AsyncOptionLoader>>({});
   readonly crossValidators = input<CrossValidator[]>([]);
   readonly previewRunner = input<PreviewRunner | null>(null);
   readonly previewLabel = input<DisplayText>({ key: 'crud.preview' });
@@ -135,6 +144,11 @@ export class CrudPageComponent implements OnInit {
   readonly formError = signal<string | null>(null);
   readonly fieldErrors = signal<Record<string, string>>({});
   readonly options = signal<Record<string, FieldOption[]>>({});
+  /**
+   * Per-field label of the current selection, resolved from the edited row.
+   * Only used for rendering an `autocomplete` field; the control keeps the id.
+   */
+  readonly initialOptions = signal<Record<string, FieldOption | null>>({});
   readonly previewResults = signal<PreviewResult[]>([]);
   readonly previewing = signal(false);
   readonly deleteTarget = signal<any | null>(null);
@@ -210,6 +224,12 @@ export class CrudPageComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.page.set(1);
+        // The form and the option caches belong to the previous company: an open
+        // modal would keep showing its references, and a stale product could
+        // still be selected.
+        this.closeModal();
+        this.options.set({});
+        void this.loadOptions();
         void this.load();
       });
   }
@@ -262,6 +282,54 @@ export class CrudPageComponent implements OnInit {
     if (field.options) return field.options;
     if (field.optionsKey) return this.options()[field.optionsKey] ?? [];
     return [];
+  }
+
+  /** Resolves the configured query-aware source for an autocomplete field. */
+  asyncSourceFor(field: FieldConfig): AsyncOptionLoader | null {
+    if (!field.asyncOptionsKey) return null;
+    return this.asyncSelectSources()[field.asyncOptionsKey] ?? null;
+  }
+
+  /** Renders an immutable reference as read-only while editing. */
+  isDisabledOnEdit(field: FieldConfig): boolean {
+    return this.isControlDisabled(field);
+  }
+
+  /** Single source of truth for the `disabledOnEdit` rule. */
+  private isControlDisabled(field: FieldConfig): boolean {
+    return field.disabledOnEdit === true && this.isEditing();
+  }
+
+  /**
+   * Marks the control as touched/dirty when a value changes through a control
+   * that does not do it itself, so the shared required treatment appears.
+   */
+  onAutocompleteSelected(field: FieldConfig): void {
+    const control = this.form.get(field.key);
+    control?.markAsDirty();
+    control?.markAsTouched();
+  }
+
+  /** Resolves the per-row label of the value an autocomplete field already has. */
+  initialOptionFor(field: FieldConfig): FieldOption | null {
+    return this.initialOptions()[field.key] ?? null;
+  }
+
+  private resolveInitialOptions(row: any): Record<string, FieldOption | null> {
+    const resolved: Record<string, FieldOption | null> = {};
+
+    for (const field of this.fields()) {
+      if (!field.initialOption) continue;
+      try {
+        resolved[field.key] = field.initialOption(row) ?? null;
+      } catch {
+        // A broken label resolver must not break opening the modal: the field
+        // then falls back to showing the raw id.
+        resolved[field.key] = null;
+      }
+    }
+
+    return resolved;
   }
 
   // --- toolbar -------------------------------------------------------------
@@ -352,7 +420,14 @@ export class CrudPageComponent implements OnInit {
       }
 
       const initial = values[field.key] ?? field.defaultValue ?? (field.type === 'checkbox' ? false : '');
-      controls[field.key] = new FormControl(initial, { validators, nonNullable: false });
+      const control = new FormControl(initial, { validators, nonNullable: false });
+
+      // A disabled control still participates in the form and in `getRawValue`,
+      // so an immutable reference keeps its value for the preview while being
+      // impossible to change through the UI.
+      if (this.isControlDisabled(field)) control.disable();
+
+      controls[field.key] = control;
     }
 
     const group = this.fb.group(controls);
@@ -371,6 +446,7 @@ export class CrudPageComponent implements OnInit {
     this.formError.set(null);
     this.fieldErrors.set({});
     this.previewResults.set([]);
+    this.initialOptions.set({});
     this.modalOpen.set(true);
   }
 
@@ -381,6 +457,7 @@ export class CrudPageComponent implements OnInit {
     this.formError.set(null);
     this.fieldErrors.set({});
     this.previewResults.set([]);
+    this.initialOptions.set(this.resolveInitialOptions(row));
     this.modalOpen.set(true);
   }
 
@@ -388,6 +465,7 @@ export class CrudPageComponent implements OnInit {
     this.modalOpen.set(false);
     this.editing.set(null);
     this.previewResults.set([]);
+    this.initialOptions.set({});
   }
 
   /** Runs the optional preview (used by the price form to show the final price). */

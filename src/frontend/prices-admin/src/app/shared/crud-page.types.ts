@@ -6,6 +6,7 @@ export type FieldType =
   | 'textarea'
   | 'number'
   | 'select'
+  | 'autocomplete'
   | 'date'
   | 'password'
   | 'checkbox'
@@ -60,6 +61,27 @@ export interface FieldConfig {
   options?: FieldOption[];
   /** Key into the page `selectSources` map for dynamically loaded options. */
   optionsKey?: string;
+  /**
+   * Key into the page `asyncSelectSources` map for an `autocomplete` field.
+   *
+   * Deliberately separate from `optionsKey`: a select source is eager and loads
+   * once per page, while an async source is called with the typed term and must
+   * stay query-aware.
+   */
+  asyncOptionsKey?: string;
+  /** Minimum typed characters before an async source is queried. */
+  minLength?: number;
+  /**
+   * Label of the current selection in edit mode, derived from the row.
+   *
+   * The eager `selectSources` cache is loaded once per page and cannot supply a
+   * per-row label, so an autocomplete field declares where its existing value's
+   * label comes from. It only affects rendering: the form control keeps holding
+   * the plain id.
+   */
+  initialOption?: (row: any) => FieldOption | null;
+  /** Renders the field read-only while editing (immutable references). */
+  disabledOnEdit?: boolean;
   min?: number;
   max?: number;
   step?: number;
@@ -93,6 +115,13 @@ export interface ColumnConfig {
 }
 
 export type OptionLoader = () => Observable<FieldOption[]>;
+/**
+ * Query-aware option source for an `autocomplete` field.
+ *
+ * It is called with the trimmed term the user typed, and must return the
+ * options for that term only — it is never asked for the whole catalog.
+ */
+export type AsyncOptionLoader = (term: string) => Observable<FieldOption[] | { data: FieldOption[] }>;
 export type CrossValidator = (control: AbstractControl) => ValidationErrors | null;
 
 export interface PreviewResult {

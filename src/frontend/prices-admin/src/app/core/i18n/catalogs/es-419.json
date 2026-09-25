@@ -2,6 +2,11 @@
   "app": {
     "title": "PriceGrid — Administración de precios"
   },
+  "autocomplete": {
+    "noResults": "Sin resultados",
+    "loadError": "No se pudieron cargar las opciones",
+    "minLength": "Escribe al menos {{minimum}} caracteres para buscar"
+  },
   "language": {
     "es419": "Español",
     "enUS": "English",
@@ -288,7 +293,8 @@
     "title": "Precios",
     "subtitle": "Precio por producto, lista y marketplace, con cálculo de precio final.",
     "entity": "precio",
-    "searchPlaceholder": "Buscar por notas…",
+    "searchPlaceholder": "Buscar por SKU o nombre…",
+    "productSearchPlaceholder": "Buscar producto por SKU o nombre…",
     "emptyMessage": "Registra el primer precio para ver el cálculo del descuento aplicable.",
     "columns": {
       "list": "Lista",
@@ -346,7 +352,7 @@
     "title": "Historial de precios",
     "subtitle": "Registro append-only de cada cambio de precio base o final.",
     "entity": "movimiento",
-    "searchPlaceholder": "Buscar por motivo…",
+    "searchPlaceholder": "Buscar por SKU o nombre…",
     "emptyMessage": "Aún no hay cambios de precio registrados.",
     "columns": {
       "date": "Fecha",

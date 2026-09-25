@@ -1,3 +1,10 @@
+/*
+ * Must stay ahead of the Tailwind directives: the CDK overlay container needs
+ * its base positioning rules before the utility layers are emitted. The
+ * autocomplete suggestion panel is the only consumer.
+ */
+@import '@angular/cdk/overlay-prebuilt.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

@@ -2,6 +2,11 @@
   "app": {
     "title": "PriceGrid — Price administration"
   },
+  "autocomplete": {
+    "noResults": "No results",
+    "loadError": "The options could not be loaded",
+    "minLength": "Type at least {{minimum}} characters to search"
+  },
   "language": {
     "es419": "Español",
     "enUS": "English",
@@ -288,7 +293,8 @@
     "title": "Prices",
     "subtitle": "Price per product, list and marketplace, with final price calculation.",
     "entity": "price",
-    "searchPlaceholder": "Search by notes…",
+    "searchPlaceholder": "Search by SKU or name…",
+    "productSearchPlaceholder": "Search product by SKU or name…",
     "emptyMessage": "Register the first price to see the applicable discount calculation.",
     "columns": {
       "list": "List",
@@ -346,7 +352,7 @@
     "title": "Price history",
     "subtitle": "Append-only log of every base or final price change.",
     "entity": "entry",
-    "searchPlaceholder": "Search by reason…",
+    "searchPlaceholder": "Search by SKU or name…",
     "emptyMessage": "No price changes recorded yet.",
     "columns": {
       "date": "Date",

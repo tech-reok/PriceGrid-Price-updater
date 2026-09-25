@@ -27,8 +27,27 @@ function valueOf(row: Row, path: string): any {
   return path.split('.').reduce<any>((acc, key) => (acc == null ? acc : acc[key]), row);
 }
 
+/** Supported subset of the Prisma filter operators. */
+interface MatchContext {
+  store: Record<string, Row[]>;
+  /** Model currently being filtered; needed to resolve relation keys. */
+  model: string;
+  /** When true, a filter the double cannot evaluate throws instead of matching. */
+  strict: boolean;
+}
+
+interface UnknownFilterError extends Error {
+  filterKey?: string;
+}
+
 /** Supports the Prisma filter operators used across the codebase. */
-function matchCondition(value: any, condition: any): boolean {
+/**
+ * Value-level matcher.
+ *
+ * Exported so a spec can assert the operator contract directly, without going
+ * through a delegate and a full model fixture.
+ */
+export function matchCondition(value: any, condition: any, context: MatchContext): boolean {
   if (condition === null || condition === undefined) {
     return value === null || value === undefined;
   }
@@ -45,13 +64,13 @@ function matchCondition(value: any, condition: any): boolean {
   return entries.every(([operator, operand]) => {
     switch (operator) {
       case 'equals':
-        return matchCondition(value, operand);
+        return matchCondition(value, operand, context);
       case 'not':
-        return !matchCondition(value, operand);
+        return !matchCondition(value, operand, context);
       case 'in':
-        return Array.isArray(operand) && operand.some((item) => matchCondition(value, item));
+        return Array.isArray(operand) && operand.some((item) => matchCondition(value, item, context));
       case 'notIn':
-        return Array.isArray(operand) && !operand.some((item) => matchCondition(value, item));
+        return Array.isArray(operand) && !operand.some((item) => matchCondition(value, item, context));
       case 'contains':
         return (
           typeof value === 'string' &&
@@ -70,29 +89,219 @@ function matchCondition(value: any, condition: any): boolean {
       case 'lt':
         return value !== null && value !== undefined && value < (operand as any);
       default:
-        // Relation filters are not simulated.
-        return true;
+        return unexpectedFilter(operator, context);
     }
   });
 }
 
-export function matchWhere(row: Row, where: any): boolean {
+function isRelationKey(model: string, key: string): boolean {
+  return Boolean(BELONGS_TO[model]?.[key]);
+}
+
+/**
+ * Evaluates a to-one relation filter such as
+ * `{ product: { is: { sku: { contains: 'x' } } } }`.
+ *
+ * The row only stores the foreign key (`productId`), so the related row is
+ * resolved through the `BELONGS_TO` mapping before the nested condition is
+ * evaluated. The caller has already unwrapped `is`.
+ */
+function matchRelationFilter(
+  row: Row,
+  relation: string,
+  condition: any,
+  context: MatchContext
+): boolean {
+  const mapping = BELONGS_TO[context.model]?.[relation];
+  if (!mapping) return false;
+
+  const [relatedModel, localKey, relatedKey] = mapping;
+  const foreignKey = valueOf(row, localKey);
+  const related =
+    foreignKey === null || foreignKey === undefined
+      ? null
+      : context.store[relatedModel]?.find((candidate) => candidate[relatedKey] === foreignKey) ?? null;
+
+  if (condition === null || condition === undefined) return related === null;
+  if (related === null) return false;
+
+  return matchWhere(related, condition, { ...context, model: relatedModel });
+}
+
+/**
+ * Wraps a value into its Prisma single-value filter operators.
+ *
+ * A model field named exactly like an operator (e.g. a boolean column called
+ * `not`) would be misread as an operator. No current model has one, and the
+ * failure mode is loud rather than silent, so this is documented rather than
+ * engineered around.
+ */
+const SINGLE_VALUE_OPERATORS = ['equals', 'not', 'in', 'notIn', 'is', 'isNot'] as const;
+
+/** Operators that compare a value directly (never a nested where input). */
+const FILTER_OPERATORS = new Set<string>([
+  'contains',
+  'startsWith',
+  'endsWith',
+  'gte',
+  'lte',
+  'gt',
+  'lt'
+]);
+
+function isOperatorKey(key: string): boolean {
+  return (SINGLE_VALUE_OPERATORS as readonly string[]).includes(key) || FILTER_OPERATORS.has(key);
+}
+function isPlainObject(value: any): boolean {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
+}
+
+/**
+ * Normalizes a condition into `[operators, value]`.
+ *
+ * Prisma accepts a bare value (`status: 'active'`) or an operator object
+ * (`status: { in: [...] }`). A relation key instead holds a foreign key, so it
+ * resolves through `matchRelationFilter`.
+ */
+function resolveCondition(
+  value: any,
+  condition: any,
+  context: MatchContext,
+  key?: string,
+  row?: Row
+): [Record<string, any>, any] {
+  let operators: Record<string, any> = {};
+  let operand = condition;
+
+  // `{ is: { ... } }` reads as "the related row matches this where input", so the
+  // wrapper is unwrapped before matching the relation. `is: null` / `isNot: null`
+  // are kept as operators for the matcher to interpret.
+  if (isPlainObject(operand)) {
+    const wrapper = operand as Record<string, any>;
+    if (wrapper['is'] !== null && wrapper['is'] !== undefined && 'is' in wrapper) {
+      operators = { is: wrapper['is'] };
+      operand = wrapper['is'];
+    } else if (wrapper['isNot'] !== null && wrapper['isNot'] !== undefined && 'isNot' in wrapper) {
+      operators = { isNot: wrapper['isNot'] };
+      operand = wrapper['isNot'];
+    } else if ('is' in wrapper || 'isNot' in wrapper) {
+      operators = wrapper;
+      operand = null;
+    }
+  }
+
+  if (key && row && isRelationKey(context.model, key) && (isPlainObject(operand) || operand === null)) {
+    return [operators, () => matchRelationFilter(row, key, operand, context)];
+  }
+
+  // A primitive operand is a plain equality comparison, never a nested where
+  // input: `{ id: 'missing' }` must not be read as "filter id by 'missing'".
+  if (!isPlainObject(operand)) {
+    return [operators, (candidate: any) => matchCondition(candidate, operand, context)];
+  }
+
+  const keys = Object.keys(operand);
+  if (keys.length > 0 && keys.every(isOperatorKey)) {
+    return [operators, (candidate: any) => matchCondition(candidate, operand, context)];
+  }
+
+  // A nested where input (`{ sku: { contains: 'x' } }`) is only meaningful when
+  // the value being filtered is itself a row. For a scalar value the keys of the
+  // operand are operators, never field names.
+  if (isPlainObject(operand) && isPlainObject(value)) {
+    return [operators, (candidate: any) => matchWhere(candidate, operand, context)];
+  }
+
+  // A nested where input that the caller could not classify still has to be
+  // evaluated with the scalar operator semantics.
+  return [operators, (candidate: any) => matchCondition(candidate, operand, context)];
+}
+
+function applyMatcher(value: any, operators: Record<string, any>, matcher: Matcher, context: MatchContext): boolean {
+  const entries = Object.entries(operators);
+  // With no wrapper operator the matcher *is* the answer. Returning true for an
+  // empty operator map would make every filter match.
+  if (entries.length === 0) return matcher(value);
+
+  return entries.every(([operator, operand]) => {
+    switch (operator) {
+      case 'is':
+        // Without a related row the only meaningful check is `is: null`.
+        return matcher === null ? value === null || value === undefined : matcher(value);
+      case 'isNot':
+        return matcher === null ? value !== null && value !== undefined : !matcher(value);
+      case 'not': {
+        const [, nested] = resolveCondition(value, operand, context);
+        return !nested(value);
+      }
+      default:
+        // `equals` and the scalar operators are handled by matchCondition, which
+        // owns the value-level comparison semantics.
+        return matchCondition(value, { [operator]: operand }, context);
+    }
+  });
+}
+
+/** Single place where the operator/value contract of the double is decided. */
+function matchesCondition(
+  value: any,
+  condition: any,
+  context: MatchContext,
+  key?: string,
+  row?: Row
+): boolean {
+  const [operators, matcher] = resolveCondition(value, condition, context, key, row);
+  return applyMatcher(value, operators, matcher, context);
+}
+
+function unexpectedFilter(operator: string, context: MatchContext): boolean {
+  // Matching an unimplemented filter silently would turn a broken query into a
+  // passing test, which is worse than failing here.
+  if (context.strict) {
+    const error = new Error(
+      `fake-prisma: cannot evaluate filter '${operator}' on model '${context.model}'`
+    ) as UnknownFilterError;
+    error.filterKey = operator;
+    throw error;
+  }
+  return false;
+}
+
+type Matcher = (value: any) => boolean;
+
+export function matchWhere(row: Row, where: any, context?: Partial<MatchContext>): boolean {
   if (!where) return true;
+
+  const resolved: MatchContext = {
+    store: context?.store ?? {},
+    model: context?.model ?? '',
+    strict: context?.strict ?? true
+  };
+
+  // `where` is sometimes a value filter rather than a field map
+  // (`matchCondition` recurses with the operand of `not`, for example).
+  if (isPlainObject(where)) {
+    const keys = Object.keys(where);
+    if (keys.length > 0 && keys.every(isOperatorKey)) {
+      return matchesCondition(row, where, resolved);
+    }
+  }
 
   return Object.entries(where).every(([key, condition]) => {
     if (key === 'AND') {
       const clauses = Array.isArray(condition) ? condition : [condition];
-      return clauses.every((clause) => matchWhere(row, clause));
+      return clauses.every((clause) => matchWhere(row, clause, resolved));
     }
     if (key === 'OR') {
       const clauses = Array.isArray(condition) ? condition : [condition];
-      return clauses.some((clause) => matchWhere(row, clause));
+      return clauses.some((clause) => matchWhere(row, clause, resolved));
     }
     if (key === 'NOT') {
       const clauses = Array.isArray(condition) ? condition : [condition];
-      return !clauses.some((clause) => matchWhere(row, clause));
+      return !clauses.some((clause) => matchWhere(row, clause, resolved));
     }
-    return matchCondition(valueOf(row, key), condition);
+
+    return matchesCondition(valueOf(row, key), condition, resolved, key, row);
   });
 }
 
@@ -189,6 +398,16 @@ export function createFakePrisma(initial: Record<string, Row[]> = {}): any {
 
   const clone = (row: Row): Row => ({ ...row });
 
+  /** Resolves a simple belongsTo relation using the mapping table. */
+  const resolveRelated = (model: string, row: Row, relation: string): Row | null => {
+    const mapping = BELONGS_TO[model]?.[relation];
+    if (!mapping) return null;
+    const [relatedModel, localKey, relatedKey] = mapping;
+    const foreignKey = row[localKey];
+    if (foreignKey === null || foreignKey === undefined) return null;
+    return ensure(relatedModel).find((candidate) => candidate[relatedKey] === foreignKey) ?? null;
+  };
+
   /** Resolves simple belongsTo relations declared through `include`. */
   const decorate = (model: string, row: Row | null, include?: any): any => {
     if (!row) return row;
@@ -196,10 +415,8 @@ export function createFakePrisma(initial: Record<string, Row[]> = {}): any {
     if (!include) return result;
 
     for (const relation of Object.keys(include)) {
-      const mapping = BELONGS_TO[model]?.[relation];
-      if (!mapping) continue;
-      const [relatedModel, localKey, relatedKey] = mapping;
-      const related = ensure(relatedModel).find((candidate) => candidate[relatedKey] === row[localKey]);
+      if (!BELONGS_TO[model]?.[relation]) continue;
+      const related = resolveRelated(model, row, relation);
       result[relation] = related ? clone(related) : null;
     }
 
@@ -210,8 +427,12 @@ export function createFakePrisma(initial: Record<string, Row[]> = {}): any {
     const rows = (): Row[] => ensure(model);
     const delegate: any = {};
 
+    // Relation filters such as `{ product: { is: { sku: { contains: 'x' } } } }`
+    // need the sibling stores to resolve the related row.
+    const context = (): MatchContext => ({ store, model, strict: true });
+
     delegate.findFirst = async ({ where, orderBy, include }: any = {}) => {
-      let found = rows().filter((row) => matchWhere(row, where));
+      let found = rows().filter((row) => matchWhere(row, where, context()));
       if (orderBy) found = sortRows(found, orderBy);
       return found.length > 0 ? decorate(model, found[0], include) : null;
     };
@@ -219,7 +440,7 @@ export function createFakePrisma(initial: Record<string, Row[]> = {}): any {
     delegate.findUnique = async ({ where, include }: any = {}) => delegate.findFirst({ where, include });
 
     delegate.findMany = async ({ where, orderBy, skip, take, include }: any = {}) => {
-      let found = rows().filter((row) => matchWhere(row, where));
+      let found = rows().filter((row) => matchWhere(row, where, context()));
       if (orderBy) found = sortRows(found, orderBy);
       if (typeof skip === 'number') found = found.slice(skip);
       if (typeof take === 'number') found = found.slice(0, take);
@@ -246,14 +467,14 @@ export function createFakePrisma(initial: Record<string, Row[]> = {}): any {
     };
 
     delegate.update = async ({ where, data, include }: any = {}) => {
-      const row = rows().find((candidate) => matchWhere(candidate, where));
+      const row = rows().find((candidate) => matchWhere(candidate, where, context()));
       if (!row) throw new Error(`${model} not found`);
       Object.assign(row, data, { updatedAt: new Date() });
       return decorate(model, row, include);
     };
 
     delegate.updateMany = async ({ where, data }: any = {}) => {
-      const found = rows().filter((row) => matchWhere(row, where));
+      const found = rows().filter((row) => matchWhere(row, where, context()));
       found.forEach((row) => {
         for (const [field, value] of Object.entries(data ?? {})) {
           if (value && typeof value === 'object' && 'increment' in value) {
@@ -267,7 +488,7 @@ export function createFakePrisma(initial: Record<string, Row[]> = {}): any {
     };
 
     delegate.upsert = async ({ where, create, update }: any = {}) => {
-      const row = rows().find((candidate) => matchWhere(candidate, where));
+      const row = rows().find((candidate) => matchWhere(candidate, where, context()));
       if (row) {
         Object.assign(row, update, { updatedAt: new Date() });
         return clone(row);
@@ -276,23 +497,24 @@ export function createFakePrisma(initial: Record<string, Row[]> = {}): any {
     };
 
     delegate.deleteMany = async ({ where }: any = {}) => {
-      const keep = rows().filter((row) => !matchWhere(row, where));
+      const keep = rows().filter((row) => !matchWhere(row, where, context()));
       const removed = rows().length - keep.length;
       store[model] = keep;
       return { count: removed };
     };
 
     delegate.delete = async ({ where }: any = {}) => {
-      const index = rows().findIndex((row) => matchWhere(row, where));
+      const index = rows().findIndex((row) => matchWhere(row, where, context()));
       if (index < 0) throw new Error(`${model} not found`);
       const [removed] = store[model].splice(index, 1);
       return clone(removed);
     };
 
-    delegate.count = async ({ where }: any = {}) => rows().filter((row) => matchWhere(row, where)).length;
+    delegate.count = async ({ where }: any = {}) =>
+      rows().filter((row) => matchWhere(row, where, context())).length;
 
     delegate.groupBy = async ({ by, where, _count, _avg }: any = {}) => {
-      const found = rows().filter((row) => matchWhere(row, where));
+      const found = rows().filter((row) => matchWhere(row, where, context()));
       const groups = new Map<string, Row[]>();
 
       for (const row of found) {

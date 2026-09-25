@@ -54,10 +54,19 @@ export class TenantCrudRepository<T = any> {
       where.status = query.status;
     }
 
-    if (query.search && this.options.searchableFields.length > 0) {
-      where.OR = this.options.searchableFields.map((field) => ({
-        [field]: { contains: query.search }
-      }));
+    // The term is trimmed once, here, so neither branch can emit a predicate
+    // that matches everything (`contains: ''`) or an empty `OR` array, which
+    // Prisma rejects at runtime.
+    const term = typeof query.search === 'string' ? query.search.trim() : '';
+
+    if (term !== '') {
+      const clauses = this.options.searchWhere
+        ? this.options.searchWhere(term)
+        : this.options.searchableFields.map((field) => ({
+            [field]: { contains: term }
+          }));
+
+      if (clauses.length > 0) where.OR = clauses;
     }
 
     for (const field of this.options.filterableFields) {

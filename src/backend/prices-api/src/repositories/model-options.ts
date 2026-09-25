@@ -1,6 +1,19 @@
 import type { CrudModelOptions } from '../common/crud/types';
 
 /**
+ * Relation-aware search for records whose text lives on the related product.
+ *
+ * `Price` and `PriceHistory` cannot use `searchableFields` for this: a dotted
+ * path such as `product.sku` is not a scalar column, so the generic builder
+ * would emit an invalid Prisma filter. The two clauses below are the `OR` block
+ * of the query, while tenant/soft-delete/status stay in the outer `where`.
+ */
+const searchByProductSkuOrName = (term: string): Record<string, unknown>[] => [
+  { product: { is: { sku: { contains: term } } } },
+  { product: { is: { name: { contains: term } } } }
+];
+
+/**
  * Declarative CRUD configuration per Prisma model. Keeps repositories thin and
  * makes the tenant/soft-delete/search behaviour explicit.
  */
@@ -79,7 +92,8 @@ export const MODEL_OPTIONS: Record<string, CrudModelOptions> = {
     model: 'price',
     tenantScoped: true,
     hasDeletedAt: true,
-    searchableFields: ['notes'],
+    searchableFields: [],
+    searchWhere: searchByProductSkuOrName,
     filterableFields: ['status', 'productId', 'priceListId', 'marketplaceId', 'currencyCode'],
     defaultSortField: 'createdAt',
     include: {
@@ -95,7 +109,8 @@ export const MODEL_OPTIONS: Record<string, CrudModelOptions> = {
     tenantScoped: true,
     hasDeletedAt: false,
     hasStatus: false,
-    searchableFields: ['reason'],
+    searchableFields: [],
+    searchWhere: searchByProductSkuOrName,
     filterableFields: ['priceId', 'productId', 'changedByType'],
     defaultSortField: 'createdAt',
     include: { product: { select: { id: true, sku: true, name: true } } }

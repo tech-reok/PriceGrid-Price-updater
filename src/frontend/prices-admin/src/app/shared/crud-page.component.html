@@ -255,6 +255,19 @@
                     }
                   </select>
                 }
+                @case ('autocomplete') {
+                  <app-async-autocomplete
+                    [id]="'field-' + field.key"
+                    [placeholder]="field.placeholder | displayText"
+                    [search]="asyncSourceFor(field)"
+                    [minLength]="field.minLength ?? 4"
+                    [invalid]="isInvalid(field)"
+                    [initialOption]="initialOptionFor(field)"
+                    [testId]="'autocomplete-' + field.key"
+                    [formControlName]="field.key"
+                    (optionSelected)="onAutocompleteSelected(field)"
+                  ></app-async-autocomplete>
+                }
                 @case ('checkbox') {
                   <label class="inline-flex items-center gap-2 text-sm text-forest">
                     <input
