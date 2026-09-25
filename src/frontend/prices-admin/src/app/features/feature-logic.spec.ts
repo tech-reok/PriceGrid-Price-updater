@@ -208,12 +208,34 @@ describe('PricesComponent logic', () => {
     });
   });
 
-  it('builds the product select options with SKU and name', (done) => {
-    component.selectSources.products().subscribe((options) => {
+  it('queries the product source by term and maps SKU and name', (done) => {
+    const products = TestBed.inject(ProductService) as any;
+
+    component.asyncSelectSources['products']('cafe').subscribe((result) => {
+      // The catalog is never preloaded: the source is query-aware and asks the
+      // API only for active products matching the term.
+      expect(products.list).toHaveBeenCalledWith({
+        search: 'cafe',
+        status: 'active',
+        page: 1,
+        limit: 30
+      });
       // SKU and name are business data, so the label is a literal.
-      expect(options).toEqual([{ value: 'p1', label: { text: 'SKU-1 — Cafetera' } }]);
+      expect(result).toEqual({ data: [{ value: 'p1', label: { text: 'SKU-1 — Cafetera' } }] });
       done();
     });
+  });
+
+  it('resolves the linked product label for the edit modal from the row', () => {
+    const field = component.fields.find((candidate) => candidate.key === 'productId');
+
+    expect(
+      field?.initialOption?.({ productId: 'p9', product: { id: 'p9', sku: 'SKU-9', name: 'Antiguo' } })
+    ).toEqual({ value: 'p9', label: { text: 'SKU-9 — Antiguo' } });
+
+    // No included product (or no product at all) degrades to no label.
+    expect(field?.initialOption?.({ productId: 'p9' })).toBeNull();
+    expect(field?.initialOption?.({})).toBeNull();
   });
 
   it('builds the remaining select sources', (done) => {
@@ -223,6 +245,11 @@ describe('PricesComponent logic', () => {
         expect(marketplaces[0].value).toBe('m1');
         component.selectSources.currencies().subscribe((currencies) => {
           expect(Array.isArray(currencies)).toBe(true);
+          // Only the product field became an autocomplete: the other references
+          // keep their eager select sources.
+          expect(
+            (component.selectSources as Record<string, unknown>)['products']
+          ).toBeUndefined();
           done();
         });
       });

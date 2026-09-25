@@ -3,8 +3,9 @@ import { CrudService } from '../../src/common/crud/service';
 import { createCrudController, requireActor, requireTenant } from '../../src/common/crud/controller';
 import { createCrudRouter, createReadOnlyRouter } from '../../src/common/crud/router';
 import { NotFoundError, UnauthorizedError } from '../../src/common/errors';
+import { MODEL_OPTIONS } from '../../src/repositories/model-options';
 import type { CrudModelOptions } from '../../src/common/crud/types';
-import { createFakePrisma } from '../helpers/fake-prisma';
+import { createFakePrisma, matchCondition } from '../helpers/fake-prisma';
 import { mockRequest, mockResponse, runHandler } from '../helpers/http';
 
 const OPTIONS: CrudModelOptions = {
@@ -163,6 +164,256 @@ describe('TenantCrudRepository — filtering, search and pagination', () => {
     await expect(repository.count(TENANT_A)).resolves.toBe(2);
     await expect(repository.count(TENANT_A, { status: 'active' })).resolves.toBe(1);
     await expect(repository.findMany(TENANT_A, { status: 'active' })).resolves.toHaveLength(1);
+  });
+});
+
+/**
+ * Relation-aware search (`searchWhere`).
+ *
+ * `Price` and `PriceHistory` carry their text on the related product, so the
+ * generic builder cannot use `searchableFields`. These specs use the real
+ * `MODEL_OPTIONS` so the assertion cannot drift from the shipped configuration.
+ */
+describe('TenantCrudRepository — relation-aware product search', () => {
+  const buildPriceRepository = () => {
+    const prisma = createFakePrisma({
+      product: [
+        { id: 'prod-cafe', tenantId: TENANT_A, sku: 'CAFE-1000', name: 'Cafetera', status: 'active', deletedAt: null },
+        { id: 'prod-tost', tenantId: TENANT_A, sku: 'TOST-2000', name: 'Tostadora', status: 'active', deletedAt: null },
+        { id: 'prod-borrada', tenantId: TENANT_A, sku: 'VIEJA-9999', name: 'Cafetera vieja', status: 'active', deletedAt: new Date('2024-05-01') },
+        { id: 'prod-otro', tenantId: TENANT_B, sku: 'OTRA-7777', name: 'Cafetera de otra empresa', status: 'active', deletedAt: null }
+      ],
+      price: [
+        { id: 'price-cafe', tenantId: TENANT_A, productId: 'prod-cafe', basePrice: 100, currencyCode: 'MXN', status: 'active', deletedAt: null, notes: 'sin coincidencia', createdAt: new Date('2024-01-01') },
+        { id: 'price-tost', tenantId: TENANT_A, productId: 'prod-tost', basePrice: 200, currencyCode: 'MXN', status: 'active', deletedAt: null, notes: 'promo de temporada', createdAt: new Date('2024-02-01') },
+        { id: 'price-tost-inactive', tenantId: TENANT_A, productId: 'prod-tost', basePrice: 210, currencyCode: 'MXN', status: 'inactive', deletedAt: null, notes: null, createdAt: new Date('2024-02-02') },
+        { id: 'price-notas', tenantId: TENANT_A, productId: 'prod-cafe', basePrice: 300, currencyCode: 'MXN', status: 'active', deletedAt: null, notes: 'liquidacion', createdAt: new Date('2024-03-01') },
+        { id: 'price-borrada', tenantId: TENANT_A, productId: 'prod-borrada', basePrice: 400, currencyCode: 'MXN', status: 'active', deletedAt: new Date('2024-04-01'), notes: null, createdAt: new Date('2024-04-01') },
+        { id: 'price-otro', tenantId: TENANT_B, productId: 'prod-otro', basePrice: 500, currencyCode: 'MXN', status: 'active', deletedAt: null, notes: null, createdAt: new Date('2024-05-01') }
+      ],
+      priceHistory: [
+        { id: 'hist-cafe', tenantId: TENANT_A, priceId: 'price-cafe', productId: 'prod-cafe', reason: 'created', newBasePrice: 100, createdAt: new Date('2024-01-01') },
+        { id: 'hist-tost', tenantId: TENANT_A, priceId: 'price-tost', productId: 'prod-tost', reason: 'created', newBasePrice: 200, createdAt: new Date('2024-02-01') },
+        { id: 'hist-otro', tenantId: TENANT_B, priceId: 'price-otro', productId: 'prod-otro', reason: 'created', newBasePrice: 500, createdAt: new Date('2024-03-01') }
+      ]
+    });
+
+    return {
+      prisma,
+      price: new TenantCrudRepository(prisma, MODEL_OPTIONS['price']),
+      priceHistory: new TenantCrudRepository(prisma, MODEL_OPTIONS['priceHistory'])
+    };
+  };
+
+  it('searches prices by the related product SKU', async () => {
+    const { price } = buildPriceRepository();
+    // Two different products match: the second price of the same product is
+    // returned too, because the predicate is on the product, not the price.
+    const result = await price.list(TENANT_A, listQuery({ search: 'CAFE-', limit: 100 }));
+
+    expect(result.data.map((row: any) => row.id).sort()).toEqual(['price-cafe', 'price-notas']);
+    expect(result.meta.total).toBe(2);
+  });
+
+  it('matches a SKU by prefix and reports every price of the matching product', async () => {
+    const { price } = buildPriceRepository();
+    const result = await price.list(TENANT_A, listQuery({ search: 'CAFE-100' }));
+
+    // `contains`, not a prefix match: "CAFE-100" is inside "CAFE-1000", and the
+    // second price of the same product also matches.
+    expect(result.data.map((row: any) => row.id).sort()).toEqual(['price-cafe', 'price-notas']);
+  });
+
+  it('searches prices by the related product name', async () => {
+    const { price } = buildPriceRepository();
+    const result = await price.list(TENANT_A, listQuery({ search: 'tostadora', limit: 100 }));
+
+    expect(result.data.map((row: any) => row.id).sort()).toEqual(['price-tost', 'price-tost-inactive']);
+  });
+
+  it('matches the SKU as a case-insensitive substring', async () => {
+    const { price } = buildPriceRepository();
+    const result = await price.list(TENANT_A, listQuery({ search: 'cafe-', limit: 100 }));
+
+    // Both prices of the matching product; the price whose product is
+    // soft-deleted is excluded.
+    expect(result.data.map((row: any) => row.id).sort()).toEqual(['price-cafe', 'price-notas']);
+  });
+
+  it('does not match text that only exists in the price notes', async () => {
+    const { price } = buildPriceRepository();
+
+    for (const search of ['liquidacion', 'temporada']) {
+      const result = await price.list(TENANT_A, listQuery({ search }));
+      expect(result.data).toEqual([]);
+      expect(result.meta.total).toBe(0);
+    }
+  });
+
+  it('keeps status, soft-delete and tenant constraints outside the OR block', async () => {
+    const { price } = buildPriceRepository();
+
+    // Two prices of the *same* product, with different statuses. Without a
+    // status filter both match; the filter narrows the same OR block.
+    const active = await price.list(TENANT_A, listQuery({ search: 'tost' }));
+    expect(active.data.map((row: any) => row.id).sort()).toEqual(['price-tost', 'price-tost-inactive']);
+
+    const activeOnly = await price.list(TENANT_A, listQuery({ search: 'tost', status: 'active' }));
+    expect(activeOnly.data.map((row: any) => row.id)).toEqual(['price-tost']);
+
+    const inactiveOnly = await price.list(TENANT_A, listQuery({ search: 'tost', status: 'inactive' }));
+    expect(inactiveOnly.data.map((row: any) => row.id)).toEqual(['price-tost-inactive']);
+
+    // The soft-deleted product is never returned, even though its SKU matches.
+    const all = await price.list(TENANT_A, listQuery({ search: 'cafe-', limit: 100 }));
+    expect(all.data.map((row: any) => row.id)).not.toContain('price-borrada');
+
+    // A row from another company is filtered by tenant before the OR is applied.
+    const otherTenant = await price.list(TENANT_B, listQuery({ search: 'OTRA-' }));
+    expect(otherTenant.data.map((row: any) => row.id)).toEqual(['price-otro']);
+    const ownTenant = await price.list(TENANT_A, listQuery({ search: 'OTRA-' }));
+    expect(ownTenant.data).toEqual([]);
+  });
+
+  it('builds the documented OR clause and keeps base predicates at the root', () => {
+    const { price, priceHistory } = buildPriceRepository();
+
+    const where = price.buildWhere(TENANT_A, listQuery({ search: 'ABC-123', status: 'active' }));
+
+    expect(where['OR']).toEqual([
+      { product: { is: { sku: { contains: 'ABC-123' } } } },
+      { product: { is: { name: { contains: 'ABC-123' } } } }
+    ]);
+    expect(where['tenantId']).toBe(TENANT_A);
+    expect(where['deletedAt']).toBeNull();
+    expect(where['status']).toBe('active');
+
+    // The history model has no status column, so no status predicate is added.
+    const historyWhere = priceHistory.buildWhere(TENANT_A, listQuery({ search: 'ABC-123', status: 'active' }));
+    expect(Object.keys(historyWhere).sort()).toEqual(['OR', 'tenantId']);
+  });
+
+  it('omits the OR clause for an empty or whitespace-only term', () => {
+    const { price } = buildPriceRepository();
+
+    for (const search of ['', '   ', '\t\n']) {
+      const where = price.buildWhere(TENANT_A, listQuery({ search }));
+      expect(where['OR']).toBeUndefined();
+    }
+
+    expect(price.buildWhere(TENANT_A, listQuery())['OR']).toBeUndefined();
+  });
+
+  it('trims the term before it reaches the query', () => {
+    const { price } = buildPriceRepository();
+    expect(price.buildWhere(TENANT_A, listQuery({ search: '  CAFE-1000  ' }))['OR']).toEqual([
+      { product: { is: { sku: { contains: 'CAFE-1000' } } } },
+      { product: { is: { name: { contains: 'CAFE-1000' } } } }
+    ]);
+  });
+
+  it('searches price history by the related product instead of the reason', async () => {
+    const { priceHistory } = buildPriceRepository();
+
+    const bySku = await priceHistory.list(TENANT_A, listQuery({ search: 'TOST-2000' }));
+    expect(bySku.data.map((row: any) => row.id)).toEqual(['hist-tost']);
+
+    const byName = await priceHistory.list(TENANT_A, listQuery({ search: 'cafetera' }));
+    expect(byName.data.map((row: any) => row.id)).toEqual(['hist-cafe']);
+
+    // `reason` is no longer part of the toolbar search.
+    const byReason = await priceHistory.list(TENANT_A, listQuery({ search: 'created' }));
+    expect(byReason.data).toEqual([]);
+    expect(byReason.meta.total).toBe(0);
+
+    // Tenant isolation holds for history too.
+    const crossTenant = await priceHistory.list(TENANT_A, listQuery({ search: 'OTRA-' }));
+    expect(crossTenant.data).toEqual([]);
+    const ownTenant = await priceHistory.list(TENANT_B, listQuery({ search: 'OTRA-' }));
+    expect(ownTenant.data.map((row: any) => row.id)).toEqual(['hist-otro']);
+  });
+
+  it('paginates the filtered rows and reports the filtered total', async () => {
+    const { price } = buildPriceRepository();
+
+    const first = await price.list(TENANT_A, listQuery({ search: 'cafe-', page: 1, limit: 1 }));
+    const second = await price.list(TENANT_A, listQuery({ search: 'cafe-', page: 2, limit: 1 }));
+
+    expect(first.meta).toEqual({ page: 1, limit: 1, total: 2, totalPages: 2 });
+    expect(second.meta).toEqual({ page: 2, limit: 1, total: 2, totalPages: 2 });
+    expect(first.data).toHaveLength(1);
+    expect(second.data).toHaveLength(1);
+    expect((first.data[0] as any).id).not.toBe((second.data[0] as any).id);
+  });
+
+  it('drops the old searchable fields from the effective sort', async () => {
+    const { price } = buildPriceRepository();
+
+    // `notes` and `reason` used to be `searchableFields`, which also made them
+    // sortable. An unknown sort field must fall back to the default field
+    // (createdAt) while still honouring the requested direction.
+    const byNotes = await price.list(TENANT_A, listQuery({ search: 'cafe-', sort: 'notes', order: 'asc' }));
+    const byDefault = await price.list(TENANT_A, listQuery({ search: 'cafe-', order: 'asc' }));
+
+    expect(byNotes.data.map((row: any) => row.id)).toEqual(['price-cafe', 'price-notas']);
+    expect(byNotes.data.map((row: any) => row.id)).toEqual(byDefault.data.map((row: any) => row.id));
+
+    // A still-valid sort field keeps working.
+    const byCreatedAt = await price.list(TENANT_A, listQuery({ search: 'cafe-', sort: 'createdAt', order: 'asc' }));
+    expect(byCreatedAt.data.map((row: any) => row.id)).toEqual(['price-cafe', 'price-notas']);
+  });
+});
+
+describe('fake-prisma relation matching', () => {
+  it('resolves a nested relation predicate through the belongsTo mapping', async () => {
+    const prisma = createFakePrisma({
+      product: [
+        { id: 'p-match', tenantId: TENANT_A, sku: 'ABC-1', name: 'Coincide', deletedAt: null },
+        { id: 'p-other', tenantId: TENANT_A, sku: 'XYZ-9', name: 'Otra', deletedAt: null }
+      ],
+      price: [
+        { id: 'price-match', tenantId: TENANT_A, productId: 'p-match', createdAt: new Date('2024-01-01') },
+        { id: 'price-other', tenantId: TENANT_A, productId: 'p-other', createdAt: new Date('2024-01-02') },
+        { id: 'price-huerfano', tenantId: TENANT_A, productId: 'p-missing', createdAt: new Date('2024-01-03') }
+      ]
+    });
+
+    const rows = await prisma.price.findMany({
+      where: { OR: [{ product: { is: { sku: { contains: 'ABC' } } } }] }
+    });
+
+    // The orphan row has no related product, so the predicate must be false.
+    expect(rows.map((row: any) => row.id)).toEqual(['price-match']);
+  });
+
+  it('supports is: null and isNot on a to-one relation', async () => {
+    const prisma = createFakePrisma({
+      product: [{ id: 'p-1', tenantId: TENANT_A, sku: 'ABC-1', name: 'Coincide', deletedAt: null }],
+      price: [
+        { id: 'price-linked', tenantId: TENANT_A, productId: 'p-1', createdAt: new Date('2024-01-01') },
+        { id: 'price-huerfano', tenantId: TENANT_A, productId: 'p-missing', createdAt: new Date('2024-01-02') }
+      ]
+    });
+
+    const withRelation = await prisma.price.findMany({ where: { product: { isNot: null } } });
+    expect(withRelation.map((row: any) => row.id)).toEqual(['price-linked']);
+
+    const withoutRelation = await prisma.price.findMany({ where: { product: { is: null } } });
+    expect(withoutRelation.map((row: any) => row.id)).toEqual(['price-huerfano']);
+
+    const notMatching = await prisma.price.findMany({
+      where: { product: { isNot: { sku: { contains: 'ABC' } } } }
+    });
+    // Only the orphan row is "not a product whose sku contains ABC".
+    expect(notMatching.map((row: any) => row.id)).toEqual(['price-huerfano']);
+  });
+
+  it('fails loudly on a filter it cannot evaluate', () => {
+    // Asserted at the matcher level: a delegate call would have to traverse a
+    // full model fixture to reach the same branch.
+    expect(() =>
+      matchCondition(10, { modulo: 10 }, { store: {}, model: 'price', strict: true })
+    ).toThrow(/cannot evaluate filter 'modulo'/);
   });
 });
 

@@ -12,6 +12,20 @@ export interface CrudModelOptions {
   hasStatus?: boolean;
   /** Text columns used by the `search` query parameter. */
   searchableFields: string[];
+  /**
+   * Optional relation-aware alternative to `searchableFields`.
+   *
+   * Direct scalar columns cannot express a search across a related model: Prisma
+   * needs a nested filter (`{ product: { is: { sku: { contains: term } } } }`),
+   * so a dotted string in `searchableFields` would silently produce an invalid
+   * query shape. Models whose text lives behind a relation declare their own
+   * clauses here instead.
+   *
+   * The returned clauses are assigned to the `OR` block of the list query, while
+   * the tenant, soft-delete, status and exact-filter predicates stay in the outer
+   * `where` object. Return an empty array to express "no search predicate".
+   */
+  searchWhere?: (term: string) => Record<string, unknown>[];
   /** Exact-match columns accepted from the query string. */
   filterableFields: string[];
   /** Sort column used when the request does not provide one. */

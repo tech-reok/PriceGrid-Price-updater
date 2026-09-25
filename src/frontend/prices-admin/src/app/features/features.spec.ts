@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { installTestTranslations, provideTranslocoTesting } from '../testing';
 import { importProvidersFrom } from '@angular/core';
 import { By } from '@angular/platform-browser';
@@ -290,15 +290,35 @@ describe('module pages', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="preview-button"]')).toBeTruthy();
   });
 
-  it('renders the discounts module', async () => {
-    const fixture = await build(DiscountsComponent, catalogProviders());
-    expect(fixture.nativeElement.textContent).toContain('Descuentos');
-  });
+  it('searches prices by SKU or name instead of by notes', fakeAsync(async () => {
+    const fixture = await build(PricesComponent, catalogProviders());
+    const priceService = TestBed.inject(PriceService) as any;
+    const page = fixture.debugElement.query(By.css('app-crud-page')).componentInstance;
+
+    // The toolbar placeholder tells the user what the field actually searches.
+    const search = fixture.nativeElement.querySelector('[data-testid="search-input"]') as HTMLInputElement;
+    expect(search.placeholder).toBe('Buscar por SKU o nombre…');
+
+    page.searchInput.setValue('CAFE-1000');
+    tick(300);
+    fixture.detectChanges();
+
+    // The term travels as `search`; the backend resolves it against the product.
+    expect(priceService.list).toHaveBeenCalledWith(jasmine.objectContaining({ search: 'CAFE-1000', page: 1 }));
+  }));
 
   it('renders the price history module as read-only', async () => {
     const fixture = await build(PriceHistoryComponent, catalogProviders());
     expect(fixture.nativeElement.textContent).toContain('Historial de precios');
     expect(fixture.nativeElement.querySelector('[data-testid="create-button"]')).toBeNull();
+
+    const search = fixture.nativeElement.querySelector('[data-testid="search-input"]') as HTMLInputElement;
+    expect(search.placeholder).toBe('Buscar por SKU o nombre…');
+  });
+
+  it('renders the discounts module', async () => {
+    const fixture = await build(DiscountsComponent, catalogProviders());
+    expect(fixture.nativeElement.textContent).toContain('Descuentos');
   });
 
   it('renders the API keys module with a revoke action', async () => {
@@ -427,6 +447,27 @@ describe('module pages', () => {
       await switchTo('es-419', fixture);
       expect(resolve(component.columns[2].label)).toBe('Precio base');
       expect(resolve(component.fields[4].label)).toBe('Estado');
+    });
+
+    it('switches the price search placeholders between locales', async () => {
+      const fixture = await build(PricesComponent, catalogProviders());
+      const component = fixture.componentInstance as PricesComponent;
+      const productField = component.fields.find((field) => field.key === 'productId')!;
+
+      /** The toolbar placeholder as the user actually sees it. */
+      function toolbarPlaceholder(): string {
+        fixture.detectChanges();
+        return (fixture.nativeElement.querySelector('[data-testid="search-input"]') as HTMLInputElement)
+          .placeholder;
+      }
+
+      await switchTo('es-419', fixture);
+      expect(toolbarPlaceholder()).toBe('Buscar por SKU o nombre…');
+      expect(resolve(productField.placeholder!)).toBe('Buscar producto por SKU o nombre…');
+
+      await switchTo('en-US', fixture);
+      expect(toolbarPlaceholder()).toBe('Search by SKU or name…');
+      expect(resolve(productField.placeholder!)).toBe('Search product by SKU or name…');
     });
 
     it('switches the users module, including the preferred-language field', async () => {

@@ -14,6 +14,7 @@ import { toDateOnlyInputValue } from '../../core/utils/format';
 import { LocaleFormattingService } from '../../core/i18n/locale-formatting.service';
 import { DisplayTextService } from '../../core/i18n/display-text.service';
 import type {
+  AsyncOptionLoader,
   ColumnConfig,
   FieldConfig,
   PayloadMapper,
@@ -36,6 +37,7 @@ import type {
       [fields]="fields"
       [service]="service"
       [selectSources]="selectSources"
+      [asyncSelectSources]="asyncSelectSources"
       [previewRunner]="previewRunner"
       [previewLabel]="{ key: 'prices.preview.label' }"
       [mapToForm]="mapToForm"
@@ -67,7 +69,26 @@ export class PricesComponent {
   ];
 
   readonly fields: FieldConfig[] = [
-    { key: 'productId', label: { key: 'common.product' }, type: 'select', required: true, optionsKey: 'products' },
+    {
+      key: 'productId',
+      label: { key: 'common.product' },
+      type: 'autocomplete',
+      required: true,
+      asyncOptionsKey: 'products',
+      minLength: 4,
+      placeholder: { key: 'prices.productSearchPlaceholder' },
+      // References are immutable on update: show the linked product and make it
+      // impossible to change. The control keeps the id for the preview.
+      disabledOnEdit: true,
+      initialOption: (row) =>
+        row?.['product']
+          ? {
+              value: row['product'].id,
+              // SKU and name are business data: shown exactly as entered.
+              label: { text: `${row['product'].sku} — ${row['product'].name}` }
+            }
+          : null
+    },
     { key: 'priceListId', label: { key: 'prices.fields.list' }, type: 'select', required: true, optionsKey: 'priceLists' },
     { key: 'marketplaceId', label: { key: 'common.marketplace' }, type: 'select', required: true, optionsKey: 'marketplaces' },
     { key: 'basePrice', label: { key: 'common.basePrice' }, type: 'number', required: true, min: 0, step: 0.01 },
@@ -91,19 +112,28 @@ export class PricesComponent {
   ];
 
   readonly selectSources = {
-    products: () =>
-      this.productService.list({ limit: 100 }).pipe(
-        map((response) =>
-          response.data.map((product) => ({
+    priceLists: idOptionLoader(this.priceListService, 'name'),
+    marketplaces: idOptionLoader(this.marketplaceService, 'name'),
+    currencies: currencyOptionLoader(this.currencyService)
+  };
+
+  /**
+   * Query-aware product source for the autocomplete field.
+   *
+   * The catalog is never preloaded: only active products matching the term are
+   * requested, so there is no 100-product ceiling and no stale full catalog.
+   */
+  readonly asyncSelectSources: Record<string, AsyncOptionLoader> = {
+    products: (term) =>
+      this.productService.list({ search: term, status: 'active', page: 1, limit: 30 }).pipe(
+        map((response) => ({
+          data: response.data.map((product) => ({
             value: product.id,
             // SKU and name are business data: shown exactly as entered.
             label: { text: `${product.sku} — ${product.name}` }
           }))
-        )
-      ),
-    priceLists: idOptionLoader(this.priceListService, 'name'),
-    marketplaces: idOptionLoader(this.marketplaceService, 'name'),
-    currencies: currencyOptionLoader(this.currencyService)
+        }))
+      )
   };
 
   /** Converts API values into form values (dates need yyyy-MM-dd). */
